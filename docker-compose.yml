@@ -9,11 +9,11 @@ services:
       # Mount Docker socket for container management
       - /var/run/docker.sock:/var/run/docker.sock
       # Data volume for persistent storage
-      - ./data:/data
+      - /var/docker/configuration:/data
       # SSH keys for authentication
-      - ./data/ssh:/data/ssh:ro
+      - /var/docker/configuration/autoupdater/.ssh:/data/ssh:ro
       # Production configuration
-      - ./appsettings.Production.json:/app/appsettings.Production.json:ro
+      - /var/docker/configuration/autoupdater/appsettings.Production.json:/app/appsettings.Production.json:ro
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080

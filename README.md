@@ -1,46 +1,63 @@
 # AutoUpdater Production Deployment
 
-This repository contains the production deployment configuration for [ModelingEvolution.AutoUpdater](https://github.com/modelingevolution/autoupdater).
-
-## Overview
-
-This compose configuration is designed for production deployments where the autoupdater monitors and updates:
-1. **Itself** (via StdPackages configuration)
-2. **Other applications** like RocketWelder (via Packages configuration)
+Production deployment configuration for [ModelingEvolution.AutoUpdater](https://github.com/modelingevolution/autoupdater).
 
 ## Quick Start
 
-1. **Clone this repository to your production server:**
+### Automated Installation (Recommended)
+
+Use the installation script for a complete setup:
+
+```bash
+# Download and run the installation script
+wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/main/installation.sh
+chmod +x installation.sh
+
+# Run with your application details
+sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
+
+# Example for RocketWelder:
+sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+```
+
+The script will:
+1. Create the `deploy` user and add it to the docker group
+2. Set up the directory structure at `/var/docker/configuration/`
+3. Generate SSH keys for secure communication
+4. Configure the autoupdater to manage both itself and your application
+5. Start the autoupdater container
+
+### Manual Installation
+
+If you prefer manual setup:
+
+1. **Create deploy user:**
    ```bash
-   git clone https://github.com/modelingevolution/autoupdater-compose.git
-   cd autoupdater-compose
+   sudo useradd -m -s /bin/bash deploy
+   sudo usermod -aG docker deploy
    ```
 
-2. **Set up SSH keys:**
+2. **Create directory structure:**
    ```bash
-   mkdir -p data/ssh
-   ssh-keygen -t rsa -b 4096 -f data/ssh/id_rsa -C "autoupdater@$(hostname)"
-   chmod 600 data/ssh/id_rsa
+   sudo mkdir -p /var/docker/configuration/autoupdater/.ssh
+   sudo mkdir -p /var/docker/configuration/repositories
+   sudo chown -R deploy:deploy /var/docker/configuration
    ```
 
-3. **Install SSH key on target hosts:**
+3. **Generate SSH keys:**
    ```bash
-   ssh-copy-id -i data/ssh/id_rsa.pub deploy@target-host
+   sudo -u deploy ssh-keygen -t rsa -b 4096 -f /var/docker/configuration/autoupdater/.ssh/id_rsa -N ""
    ```
 
-4. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env if needed
-   ```
+4. **Create configuration files:**
+   - Copy `docker-compose.yml` to `/var/docker/configuration/autoupdater/`
+   - Copy and customize `appsettings.Production.json`
+   - Create `.env` file with your settings
 
-5. **Review and customize `appsettings.Production.json`:**
-   - Update repository URLs for your applications
-   - Configure Docker registry authentication if needed
-
-6. **Start the autoupdater:**
+5. **Start the autoupdater:**
    ```bash
-   docker-compose up -d
+   cd /var/docker/configuration/autoupdater
+   sudo -u deploy docker-compose up -d
    ```
 
 ## Configuration Structure
@@ -78,23 +95,50 @@ The configuration separates packages into two categories:
 }
 ```
 
+## Installation Script Parameters
+
+The installation script accepts three required parameters:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `app-name` | Name of your application (used in repository paths) | `rocket-welder` |
+| `git-compose-url` | Git repository URL for your application's compose configuration | `https://github.com/modelingevolution/rocketwelder-compose.git` |
+| `computer-name` | Unique identifier for this deployment/computer | `POC-400` |
+
+### Example Usage
+
+```bash
+# For RocketWelder on POC-400
+sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+
+# For a different application
+sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
+```
+
 ## Directory Structure
 
+After installation, the following structure is created:
+
 ```
-autoupdater-compose/
-├── docker-compose.yml           # Main compose file
-├── appsettings.Production.json  # Production configuration
-├── .env.example                 # Environment variables template
-├── .gitignore                   # Git ignore rules
-├── data/                        # Persistent data (created at runtime)
-│   ├── ssh/                     # SSH keys
-│   │   ├── id_rsa              # Private key (generate this)
-│   │   └── id_rsa.pub          # Public key
-│   └── repositories/            # Cloned repositories
-│       ├── autoupdater-compose/
-│       └── rocket-welder-compose/
-└── README.md                    # This file
+/var/docker/configuration/
+├── autoupdater/
+│   ├── docker-compose.yml           # Generated compose file
+│   ├── appsettings.Production.json  # Generated configuration
+│   ├── .env                         # Environment variables
+│   └── .ssh/                        # SSH keys
+│       ├── id_rsa                   # Private key (auto-generated)
+│       └── id_rsa.pub               # Public key
+└── repositories/                    # Managed by autoupdater
+    ├── autoupdater-compose/         # Self-update repository
+    └── <app-name>-compose/          # Your application repository
 ```
+
+### Key Paths
+
+- **Configuration Base**: `/var/docker/configuration/`
+- **AutoUpdater Config**: `/var/docker/configuration/autoupdater/`
+- **SSH Keys**: `/var/docker/configuration/autoupdater/.ssh/`
+- **Repositories**: `/var/docker/configuration/repositories/`
 
 ## Security Considerations
 
