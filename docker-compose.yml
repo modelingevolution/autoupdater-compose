@@ -14,6 +14,7 @@ services:
       - /var/docker/configuration/autoupdater/.ssh:/data/ssh:ro
       # Production configuration
       - /var/docker/configuration/autoupdater/appsettings.Production.json:/app/appsettings.Production.json:ro
+      - /var/docker/data/autoupdater/appsettings.override.json:/app/appsettings.override.json
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
