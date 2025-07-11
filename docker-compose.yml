@@ -1,6 +1,6 @@
 services:
   modelingevolution.autoupdater.host:
-    image: modelingevolution/autoupdater:1.0.21
+    image: modelingevolution/autoupdater:1.0.22
     container_name: autoupdater
     restart: unless-stopped
     ports:
