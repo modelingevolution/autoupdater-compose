@@ -131,10 +131,18 @@ install_docker() {
     else
         log_json "info" "Installing Docker Compose"
         
-        # Install Docker Compose plugin (recommended for newer versions)
-        apt-get install -y -qq docker-compose-plugin
-        
-        log_json "info" "Docker Compose installed successfully"
+        # For Ubuntu 20.04, install standalone docker-compose, for newer versions use plugin
+        if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
+            # Install standalone docker-compose for Ubuntu 20.04
+            DOCKER_COMPOSE_VERSION="2.20.2"
+            curl -fsSL "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            log_json "info" "Docker Compose standalone installed successfully"
+        else
+            # Install Docker Compose plugin for newer Ubuntu versions
+            apt-get install -y -qq docker-compose-plugin
+            log_json "info" "Docker Compose plugin installed successfully"
+        fi
     fi
     
     log_json "info" "Docker installation completed" "docker"
