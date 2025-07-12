@@ -1,285 +1,255 @@
 #!/bin/bash
 
-# AutoUpdater Installation Script
-# Usage: ./installation.sh <app-name> <git-compose-url> <computer-name>
+# AutoUpdater Complete Installation Script
+# Usage: ./installation.sh [--json] <app-name> <git-compose-url> <computer-name>
 # Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
 
 set -e
 
-# Check parameters
-if [ $# -ne 3 ]; then
-    echo "Usage: $0 <app-name> <git-compose-url> <computer-name>"
-    echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400"
-    exit 1
-fi
+# Global variables
+JSON_OUTPUT=false
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-APP_NAME="$1"
-GIT_COMPOSE_URL="$2"
-COMPUTER_NAME="$3"
-
-# Configuration
-DEFAULT_USER="deploy"
-CONFIG_BASE="/var/docker/configuration"
-AUTOUPDATER_CONFIG="$CONFIG_BASE/autoupdater"
-DOCKER_COMPOSE_CMD="docker-compose"
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Helper functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+# Parse arguments
+parse_arguments() {
+    if [[ "$1" == "--json" ]]; then
+        JSON_OUTPUT=true
+        shift
+    fi
+    
+    if [ $# -ne 3 ]; then
+        if [ "$JSON_OUTPUT" = true ]; then
+            echo '{"status":"error","message":"Usage: ./installation.sh [--json] <app-name> <git-compose-url> <computer-name>"}'
+        else
+            echo "Usage: $0 [--json] <app-name> <git-compose-url> <computer-name>"
+            echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400"
+        fi
+        exit 1
+    fi
+    
+    APP_NAME="$1"
+    GIT_COMPOSE_URL="$2"
+    COMPUTER_NAME="$3"
 }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+# Logging functions
+log_json() {
+    local level="$1"
+    local message="$2"
+    local step="${3:-}"
+    
+    if [ "$JSON_OUTPUT" = true ]; then
+        if [ -n "$step" ]; then
+            echo "{\"status\":\"$level\",\"step\":\"$step\",\"message\":\"$message\"}"
+        else
+            echo "{\"status\":\"$level\",\"message\":\"$message\"}"
+        fi
+    else
+        case $level in
+            "info") echo -e "\e[32m[INFO]\e[0m $message" ;;
+            "warn") echo -e "\e[33m[WARN]\e[0m $message" ;;
+            "error") echo -e "\e[31m[ERROR]\e[0m $message" ;;
+            *) echo "$message" ;;
+        esac
+    fi
 }
 
 # Check if running as root
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        log_error "This script must be run as root"
+        log_json "error" "This script must be run as root"
         exit 1
     fi
 }
 
-# Create deploy user
-create_deploy_user() {
-    local username=${1:-$DEFAULT_USER}
+# Detect Ubuntu version
+detect_ubuntu_version() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [[ "$ID" == "ubuntu" ]]; then
+            UBUNTU_VERSION="$VERSION_ID"
+            log_json "info" "Detected Ubuntu $UBUNTU_VERSION"
+            return 0
+        fi
+    fi
+    log_json "error" "This script only supports Ubuntu"
+    exit 1
+}
+
+# Install Docker and Docker Compose
+install_docker() {
+    log_json "info" "Installing Docker and Docker Compose" "docker"
     
-    log_info "Creating deploy user: $username"
-    
-    if id "$username" &>/dev/null; then
-        log_warn "User $username already exists"
+    # Check if Docker is already installed
+    if command -v docker &> /dev/null; then
+        log_json "info" "Docker already installed, checking version"
+        DOCKER_VERSION=$(docker --version)
+        log_json "info" "Current Docker version: $DOCKER_VERSION"
     else
-        # Create user with home directory
-        useradd -m -s /bin/bash "$username"
+        log_json "info" "Installing Docker"
         
-        # Add user to docker group
-        usermod -aG docker "$username"
+        # Update package index
+        apt-get update -qq
         
-        log_info "User $username created and added to docker group"
+        # Install prerequisites
+        apt-get install -y -qq \
+            apt-transport-https \
+            ca-certificates \
+            curl \
+            gnupg \
+            lsb-release
+        
+        # Add Docker's official GPG key
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        
+        # Set up the repository
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        
+        # Install Docker Engine
+        apt-get update -qq
+        apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin
+        
+        # Enable and start Docker
+        systemctl enable docker
+        systemctl start docker
+        
+        log_json "info" "Docker installed successfully"
     fi
     
-    # Ensure user can access docker socket
-    if [ -S /var/run/docker.sock ]; then
-        chown root:docker /var/run/docker.sock
-        chmod 660 /var/run/docker.sock
+    # Check Docker Compose
+    if command -v docker-compose &> /dev/null; then
+        log_json "info" "Docker Compose (standalone) already installed"
+    elif docker compose version &> /dev/null 2>&1; then
+        log_json "info" "Docker Compose (plugin) already installed"
+    else
+        log_json "info" "Installing Docker Compose"
+        
+        # Install Docker Compose plugin (recommended for newer versions)
+        apt-get install -y -qq docker-compose-plugin
+        
+        log_json "info" "Docker Compose installed successfully"
     fi
+    
+    log_json "info" "Docker installation completed" "docker"
 }
 
-# Create directory structure
-create_directories() {
-    log_info "Creating directory structure"
+# Install VPN based on Ubuntu version
+install_vpn() {
+    log_json "info" "Installing VPN" "vpn"
     
-    # Create base configuration directory
-    mkdir -p "$CONFIG_BASE"
-    mkdir -p "$AUTOUPDATER_CONFIG"
-    mkdir -p "$AUTOUPDATER_CONFIG/.ssh"
-    mkdir -p "$CONFIG_BASE/repositories"
+    case "$UBUNTU_VERSION" in
+        "20.04")
+            install_openvpn
+            ;;
+        "22.04"|"24.04")
+            install_wireguard
+            ;;
+        *)
+            log_json "warn" "Unsupported Ubuntu version for VPN installation: $UBUNTU_VERSION"
+            ;;
+    esac
     
-    # Set proper permissions
-    chown -R "$DEFAULT_USER:$DEFAULT_USER" "$CONFIG_BASE"
-    chmod 755 "$CONFIG_BASE"
-    chmod 700 "$AUTOUPDATER_CONFIG/.ssh"
-    
-    log_info "Directory structure created at $CONFIG_BASE"
+    log_json "info" "VPN installation completed" "vpn"
 }
 
-# Generate SSH keys
-generate_ssh_keys() {
-    local ssh_dir="$AUTOUPDATER_CONFIG/.ssh"
-    local private_key="$ssh_dir/id_rsa"
-    local public_key="$ssh_dir/id_rsa.pub"
-    
-    log_info "Generating SSH keys for autoupdater"
-    
-    if [ -f "$private_key" ]; then
-        log_warn "SSH key already exists at $private_key"
+# Install OpenVPN for Ubuntu 20.04
+install_openvpn() {
+    if command -v openvpn &> /dev/null; then
+        log_json "info" "OpenVPN already installed"
         return 0
     fi
     
-    # Generate SSH key pair
-    sudo -u "$DEFAULT_USER" ssh-keygen -t rsa -b 4096 -f "$private_key" -N "" -C "autoupdater@$COMPUTER_NAME"
+    log_json "info" "Installing OpenVPN for Ubuntu 20.04"
     
-    # Set proper permissions
-    chmod 600 "$private_key"
-    chmod 644 "$public_key"
-    chown "$DEFAULT_USER:$DEFAULT_USER" "$private_key" "$public_key"
+    apt-get update -qq
+    apt-get install -y -qq openvpn easy-rsa
     
-    log_info "SSH keys generated:"
-    log_info "  Private key: $private_key"
-    log_info "  Public key: $public_key"
+    # Create easy-rsa directory
+    if [ ! -d /etc/openvpn/easy-rsa ]; then
+        make-cadir /etc/openvpn/easy-rsa
+        log_json "info" "OpenVPN easy-rsa directory created at /etc/openvpn/easy-rsa"
+    fi
     
-    # Install public key locally for the deploy user
-    local deploy_ssh_dir="/home/$DEFAULT_USER/.ssh"
-    sudo mkdir -p "$deploy_ssh_dir"
-    sudo sh -c "cat \"$public_key\" >> \"$deploy_ssh_dir/authorized_keys\""
-    sudo chmod 700 "$deploy_ssh_dir"
-    sudo chmod 600 "$deploy_ssh_dir/authorized_keys"
-    sudo chown -R "$DEFAULT_USER:$DEFAULT_USER" "$deploy_ssh_dir"
-    
-    log_info "SSH public key installed for local deploy user"
+    log_json "info" "OpenVPN installed successfully"
 }
 
-# Create configuration files
-create_configuration() {
-    log_info "Creating configuration files for $APP_NAME on $COMPUTER_NAME"
+# Install WireGuard for Ubuntu 22.04/24.04
+install_wireguard() {
+    if command -v wg &> /dev/null; then
+        log_json "info" "WireGuard already installed"
+        return 0
+    fi
     
-    # Create docker-compose.yml
-    cat > "$AUTOUPDATER_CONFIG/docker-compose.yml" << EOF
-services:
-  modelingevolution.autoupdater.host:
-    image: modelingevolution/autoupdater:latest
-    container_name: autoupdater
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      # Mount Docker socket for container management
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Data volume for persistent storage
-      - /var/docker/configuration:/data
-      # SSH keys for authentication
-      - /var/docker/configuration/autoupdater/.ssh:/data/ssh:ro
-      # Production configuration
-      - /var/docker/configuration/autoupdater/appsettings.Production.json:/app/appsettings.Production.json:ro
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
-      # SSH Configuration
-      - SshUser=$DEFAULT_USER
-      - SshAuthMethod=PrivateKey
-      - SshKeyPath=/data/ssh/id_rsa
-      # Host configuration
-      - HostAddress=172.17.0.1
-      - ComputerName=$COMPUTER_NAME
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - autoupdater-network
-
-networks:
-  autoupdater-network:
-    driver: bridge
-EOF
-
-    # Create appsettings.Production.json
-    cat > "$AUTOUPDATER_CONFIG/appsettings.Production.json" << EOF
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "SshUser": "$DEFAULT_USER",
-  "SshPwd": "dummy",
-  "SshAuthMethod": "PrivateKey",
-  "SshKeyPath": "/data/ssh/id_rsa",
-  "HostAddress": "172.17.0.1",
-  "ComputerName": "$COMPUTER_NAME",
-  "StdPackages": [
-    {
-      "RepositoryLocation": "/data/repositories/autoupdater-compose",
-      "RepositoryUrl": "https://github.com/modelingevolution/autoupdater-compose.git",
-      "DockerComposeDirectory": "./",
-      "DockerAuth": "",
-      "DockerRegistryUrl": ""
-    }
-  ],
-  "Packages": [
-    {
-      "RepositoryLocation": "/data/repositories/$APP_NAME-compose",
-      "RepositoryUrl": "$GIT_COMPOSE_URL",
-      "DockerComposeDirectory": "./",
-      "DockerAuth": "",
-      "DockerRegistryUrl": ""
-    }
-  ]
-}
-EOF
-
-    # Create .env file
-    cat > "$AUTOUPDATER_CONFIG/.env" << EOF
-# AutoUpdater Configuration for $COMPUTER_NAME
-SSH_USER=$DEFAULT_USER
-HOST_ADDRESS=172.17.0.1
-COMPUTER_NAME=$COMPUTER_NAME
-EOF
-
-    # Set proper ownership
-    chown -R "$DEFAULT_USER:$DEFAULT_USER" "$AUTOUPDATER_CONFIG"
+    log_json "info" "Installing WireGuard for Ubuntu $UBUNTU_VERSION"
     
-    log_info "Configuration files created"
+    apt-get update -qq
+    apt-get install -y -qq wireguard wireguard-tools
+    
+    # Create WireGuard directory
+    if [ ! -d /etc/wireguard ]; then
+        mkdir -p /etc/wireguard
+        chmod 700 /etc/wireguard
+    fi
+    
+    log_json "info" "WireGuard installed successfully"
 }
 
-# Start autoupdater
-start_autoupdater() {
-    log_info "Starting AutoUpdater container"
+# Install AutoUpdater
+install_autoupdater() {
+    log_json "info" "Installing AutoUpdater" "autoupdater"
     
-    cd "$AUTOUPDATER_CONFIG"
-    sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d
+    # Check if install-updater.sh exists
+    local updater_script="$SCRIPT_DIR/install-updater.sh"
+    if [ ! -f "$updater_script" ]; then
+        log_json "error" "install-updater.sh not found at $updater_script"
+        exit 1
+    fi
     
-    log_info "AutoUpdater started"
+    # Make it executable
+    chmod +x "$updater_script"
+    
+    # Run the updater installation
+    log_json "info" "Running AutoUpdater installation script"
+    if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME"; then
+        log_json "error" "AutoUpdater installation failed"
+        exit 1
+    fi
+    
+    log_json "info" "AutoUpdater installation completed" "autoupdater"
 }
 
 # Main installation function
 main() {
-    log_info "Starting AutoUpdater installation"
-    log_info "  Application: $APP_NAME"
-    log_info "  Repository: $GIT_COMPOSE_URL"
-    log_info "  Computer: $COMPUTER_NAME"
+    parse_arguments "$@"
+    
+    log_json "info" "Starting complete installation for $APP_NAME on $COMPUTER_NAME"
     
     # Check prerequisites
     check_root
+    detect_ubuntu_version
     
-    # Check if Docker is installed
-    if ! command -v docker &> /dev/null; then
-        log_error "Docker is not installed. Please install Docker first."
-        exit 1
-    fi
+    # Step 1: Install Docker and Docker Compose
+    install_docker
     
-    # Check if Docker Compose is installed
-    if ! command -v docker-compose &> /dev/null; then
-        # Check for docker compose plugin
-        if ! docker compose version &> /dev/null; then
-            log_error "Docker Compose is not installed. Please install Docker Compose first."
-            exit 1
-        fi
-        # Use docker compose instead of docker-compose
-        DOCKER_COMPOSE_CMD="docker compose"
+    # Step 2: Install VPN
+    install_vpn
+    
+    # Step 3: Install AutoUpdater
+    install_autoupdater
+    
+    if [ "$JSON_OUTPUT" = true ]; then
+        echo '{"status":"success","message":"Installation completed successfully","app":"'$APP_NAME'","computer":"'$COMPUTER_NAME'","ubuntu_version":"'$UBUNTU_VERSION'"}'
     else
-        DOCKER_COMPOSE_CMD="docker-compose"
+        log_json "info" "Installation completed successfully!"
+        echo ""
+        log_json "info" "Summary:"
+        log_json "info" "  - Ubuntu version: $UBUNTU_VERSION"
+        log_json "info" "  - Docker: Installed"
+        log_json "info" "  - VPN: Installed ($([ "$UBUNTU_VERSION" = "20.04" ] && echo "OpenVPN" || echo "WireGuard"))"
+        log_json "info" "  - AutoUpdater: Installed for $APP_NAME"
+        log_json "info" "  - Web UI: http://localhost:8080"
     fi
-    
-    # Perform installation steps
-    create_deploy_user "$DEFAULT_USER"
-    create_directories
-    generate_ssh_keys
-    create_configuration
-    start_autoupdater
-    
-    log_info "Installation completed successfully!"
-    echo ""
-    log_info "AutoUpdater is now running and will manage:"
-    log_info "  - Its own updates from: https://github.com/modelingevolution/autoupdater-compose.git"
-    log_info "  - $APP_NAME updates from: $GIT_COMPOSE_URL"
-    echo ""
-    log_info "Access the web UI at: http://localhost:8080"
-    log_info "Configuration directory: $AUTOUPDATER_CONFIG"
-    log_info "Check logs: docker logs -f autoupdater"
 }
 
 # Run main function

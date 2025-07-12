@@ -2,6 +2,8 @@
 
 Production deployment configuration for [ModelingEvolution.AutoUpdater](https://github.com/modelingevolution/autoupdater).
 
+> **Quick Install**: See [INSTALL.md](INSTALL.md) for a simplified installation guide.
+
 ## Quick Start
 
 ### Automated Installation (Recommended)
@@ -10,7 +12,7 @@ Use the installation script for a complete setup:
 
 ```bash
 # Download and run the installation script
-wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/main/installation.sh
+wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/installation.sh
 chmod +x installation.sh
 
 # Run with your application details
@@ -21,11 +23,13 @@ sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocket
 ```
 
 The script will:
-1. Create the `deploy` user and add it to the docker group
-2. Set up the directory structure at `/var/docker/configuration/`
-3. Generate SSH keys for secure communication
-4. Configure the autoupdater to manage both itself and your application
-5. Start the autoupdater container
+1. Install Docker and Docker Compose (if not present)
+2. Install VPN (OpenVPN for Ubuntu 20.04, WireGuard for Ubuntu 22.04+)
+3. Create the `deploy` user and add it to the docker group
+4. Set up the directory structure at `/var/docker/configuration/`
+5. Generate SSH keys for secure communication
+6. Configure the autoupdater to manage both itself and your application
+7. Start the autoupdater container
 
 ### Manual Installation
 
@@ -60,6 +64,8 @@ If you prefer manual setup:
    sudo -u deploy docker-compose up -d
    ```
 
+> **Note**: For manual installation, you'll need to install Docker, Docker Compose, and VPN separately. The automated script handles all prerequisites.
+
 ## Configuration Structure
 
 ### StdPackages vs Packages
@@ -67,7 +73,6 @@ If you prefer manual setup:
 The configuration separates packages into two categories:
 
 - **StdPackages**: System-critical packages including the autoupdater itself
-  - These are updated with higher priority
   - The autoupdater monitors its own repository here
   
 - **Packages**: Application packages managed by the autoupdater
@@ -80,14 +85,14 @@ The configuration separates packages into two categories:
 {
   "StdPackages": [
     {
-      "RepositoryLocation": "/data/repositories/autoupdater-compose",
+      "RepositoryLocation": "/data/autoupdater",
       "RepositoryUrl": "https://github.com/modelingevolution/autoupdater-compose.git",
       "DockerComposeDirectory": "./"
     }
   ],
   "Packages": [
     {
-      "RepositoryLocation": "/data/repositories/rocket-welder-compose",
+      "RepositoryLocation": "/data/rocket-welder",
       "RepositoryUrl": "https://github.com/modelingevolution/rocket-welder-compose.git",
       "DockerComposeDirectory": "./"
     }
@@ -121,24 +126,32 @@ After installation, the following structure is created:
 
 ```
 /var/docker/configuration/
-├── autoupdater/
-│   ├── docker-compose.yml           # Generated compose file
-│   ├── appsettings.Production.json  # Generated configuration
-│   ├── .env                         # Environment variables
-│   └── .ssh/                        # SSH keys
+├── autoupdater/ (GIT VERSIONED)
+│   ├── docker-compose.yml           # Git compose file
+│   ├── appsettings.Production.json  # Git configuration
+│   └── .env                         # Environment variables (exploded from GIT with gitignore)
+└── <app-name>/                      # Your application repository (maps to /data/<app-name>)
+/var/docker/data/ (NO GIT)
+├── autoupdater/app
+│   ├── appsettings.override.json    # Autoupdater computer specific configuration for this installation
+│   └── .ssh/                        # SSH keys 
 │       ├── id_rsa                   # Private key (auto-generated)
 │       └── id_rsa.pub               # Public key
-└── repositories/                    # Managed by autoupdater
-    ├── autoupdater-compose/         # Self-update repository
-    └── <app-name>-compose/          # Your application repository
+└── <app-name>/<container-name>      # Your app specific data folder for this installation for a container defined within compose
+    └── appsettings.override.json    # Additional configuration specific for this installation.
+/var/data (NO GIT)                   # If present, second partition for user-data that would be used by containers. Use-case ? Recording for RocketWelder
+├── <app-name>/<container-name>      # For example rocketwelder/app
+│   └── <specific folder defined in docker-compose from the app>
 ```
+
+**Important**: All Git repositories must be owned by `root:root` for the container to perform Git operations successfully.
 
 ### Key Paths
 
 - **Configuration Base**: `/var/docker/configuration/`
 - **AutoUpdater Config**: `/var/docker/configuration/autoupdater/`
-- **SSH Keys**: `/var/docker/configuration/autoupdater/.ssh/`
-- **Repositories**: `/var/docker/configuration/repositories/`
+- **SSH Keys**: `/var/docker/data/autoupdater/.ssh/`
+- **Repositories**: `/var/docker/configuration/`
 
 ## Security Considerations
 
@@ -167,19 +180,26 @@ After installation, the following structure is created:
 ### SSH Connection Issues
 ```bash
 # Test SSH connectivity
-docker-compose exec modelingevolution.autoupdater.host ssh -i /data/ssh/id_rsa deploy@target-host echo "Connected"
+docker-compose exec autoupdater ssh -i /data/ssh/id_rsa deploy@172.17.0.1 echo "Connected"
 
 # Check SSH key permissions
-docker-compose exec modelingevolution.autoupdater.host ls -la /data/ssh/
+docker-compose exec autoupdater ls -la /data/ssh/
 ```
 
 ### Repository Access Issues
 ```bash
 # Verify repository clone
-docker-compose exec modelingevolution.autoupdater.host ls -la /data/repositories/
+docker-compose exec autoupdater ls -la /data/
 
 # Check Git connectivity
-docker-compose exec modelingevolution.autoupdater.host git ls-remote https://github.com/modelingevolution/autoupdater-compose.git
+docker-compose exec autoupdater git ls-remote https://github.com/modelingevolution/autoupdater-compose.git
+
+# Fix Git ownership issues (if repositories show "dubious ownership" errors)
+sudo chown -R root:root /var/docker/configuration/autoupdater
+sudo chown -R root:root /var/docker/configuration/rocket-welder
+
+# Test Git operations from inside container
+docker exec autoupdater bash -c "cd /data/autoupdater && git pull"
 ```
 
 ## Updates

@@ -3,7 +3,8 @@
 ## One-Command Installation
 
 ```bash
-wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/main/installation.sh
+wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/installation.sh
+chmod +x installation.sh
 sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
 ```
 
@@ -21,11 +22,12 @@ sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-0
 
 1. Creates `deploy` user with docker access
 2. Sets up `/var/docker/configuration/` directory structure
-3. Generates SSH keys for deployments
-4. Configures autoupdater to manage:
-   - **Itself** (StdPackages)
-   - **Your app** (Packages)
-5. Starts the autoupdater container
+3. Git clones autoupdater-compose repository to `/var/docker/configuration/autoupdater`
+4. Generates SSH keys for deployments
+5. Configures autoupdater to manage:
+   - **Itself** (StdPackages) at `/data/autoupdater`
+   - **Your app** (Packages) at `/data/<app-name>`
+6. Starts the autoupdater container
 
 ## Result
 
