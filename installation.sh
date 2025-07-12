@@ -2,13 +2,16 @@
 
 # AutoUpdater Complete Installation Script (Bootstrapper)
 # This script acts as a bootstrapper that:
-# 1. Downloads required scripts if not present locally
+# 1. Downloads required scripts if not present locally (with checksum verification)
 # 2. Installs Docker and Docker Compose
 # 3. Installs VPN (OpenVPN for Ubuntu 20.04, WireGuard for 22.04+)
 # 4. Installs AutoUpdater
 #
+# Security: All downloaded scripts are verified using SHA256 checksums
+# Update checksums in install_autoupdater() when dependent scripts change
+#
 # Usage: ./installation.sh [--json] <app-name> <git-compose-url> <computer-name>
-# Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+# Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 set -e
 
@@ -209,13 +212,29 @@ install_wireguard() {
     log_json "info" "WireGuard installed successfully"
 }
 
-# Download script if not present
+# Download and verify script with checksum
 download_script() {
     local script_name="$1"
+    local expected_checksum="$2"
     local script_path="$SCRIPT_DIR/$script_name"
+    local download_needed=false
     
+    # Check if script exists and verify checksum
     if [ ! -f "$script_path" ]; then
-        log_json "info" "Downloading $script_name from GitHub repository"
+        download_needed=true
+        log_json "info" "$script_name not found, downloading from GitHub repository"
+    else
+        # Verify existing script checksum
+        local current_checksum=$(sha256sum "$script_path" | cut -d' ' -f1)
+        if [ "$current_checksum" != "$expected_checksum" ]; then
+            download_needed=true
+            log_json "warn" "$script_name checksum mismatch (expected: $expected_checksum, got: $current_checksum), re-downloading"
+        else
+            log_json "info" "$script_name exists and checksum verified"
+        fi
+    fi
+    
+    if [ "$download_needed" = true ]; then
         local url="https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/$script_name"
         
         if ! curl -fsSL "$url" -o "$script_path"; then
@@ -223,10 +242,16 @@ download_script() {
             exit 1
         fi
         
+        # Verify downloaded script checksum
+        local downloaded_checksum=$(sha256sum "$script_path" | cut -d' ' -f1)
+        if [ "$downloaded_checksum" != "$expected_checksum" ]; then
+            log_json "error" "Downloaded $script_name checksum verification failed (expected: $expected_checksum, got: $downloaded_checksum)"
+            rm -f "$script_path"
+            exit 1
+        fi
+        
         chmod +x "$script_path"
-        log_json "info" "Successfully downloaded $script_name"
-    else
-        log_json "info" "$script_name already exists locally"
+        log_json "info" "Successfully downloaded and verified $script_name"
     fi
 }
 
@@ -234,8 +259,11 @@ download_script() {
 install_autoupdater() {
     log_json "info" "Installing AutoUpdater" "autoupdater"
     
-    # Download install-updater.sh if not present
-    download_script "install-updater.sh"
+    # Expected checksums for dependent scripts (update these when scripts change)
+    local INSTALL_UPDATER_CHECKSUM="799e024d5efeb5560a56edb9c67f1753200c2639f4006de18b42f9a381e9658d"
+    
+    # Download and verify install-updater.sh
+    download_script "install-updater.sh" "$INSTALL_UPDATER_CHECKSUM"
     
     local updater_script="$SCRIPT_DIR/install-updater.sh"
     

@@ -19,7 +19,7 @@ chmod +x installation.sh
 sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
 
 # Example for RocketWelder:
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 ```
 
 The script will:
@@ -108,13 +108,13 @@ The installation script accepts three required parameters:
 |-----------|-------------|---------|
 | `app-name` | Name of your application (used in repository paths) | `rocket-welder` |
 | `git-compose-url` | Git repository URL for your application's compose configuration | `https://github.com/modelingevolution/rocketwelder-compose.git` |
-| `computer-name` | Unique identifier for this deployment/computer | `POC-400` |
+| `computer-name` | Unique identifier for this deployment/computer | `RESRV-AI` |
 
 ### Example Usage
 
 ```bash
-# For RocketWelder on POC-400
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+# For RocketWelder on RESRV-AI
+sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 # For a different application
 sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-001

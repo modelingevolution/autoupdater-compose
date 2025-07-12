@@ -11,8 +11,8 @@ sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
 ## Examples
 
 ```bash
-# RocketWelder on POC-400
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+# RocketWelder on RESRV-AI
+sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 # Custom app
 sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
