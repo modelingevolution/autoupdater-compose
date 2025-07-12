@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# AutoUpdater Complete Installation Script
+# AutoUpdater Complete Installation Script (Bootstrapper)
+# This script acts as a bootstrapper that:
+# 1. Downloads required scripts if not present locally
+# 2. Installs Docker and Docker Compose
+# 3. Installs VPN (OpenVPN for Ubuntu 20.04, WireGuard for 22.04+)
+# 4. Installs AutoUpdater
+#
 # Usage: ./installation.sh [--json] <app-name> <git-compose-url> <computer-name>
 # Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
 
@@ -195,19 +201,35 @@ install_wireguard() {
     log_json "info" "WireGuard installed successfully"
 }
 
+# Download script if not present
+download_script() {
+    local script_name="$1"
+    local script_path="$SCRIPT_DIR/$script_name"
+    
+    if [ ! -f "$script_path" ]; then
+        log_json "info" "Downloading $script_name from GitHub repository"
+        local url="https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/$script_name"
+        
+        if ! curl -fsSL "$url" -o "$script_path"; then
+            log_json "error" "Failed to download $script_name from $url"
+            exit 1
+        fi
+        
+        chmod +x "$script_path"
+        log_json "info" "Successfully downloaded $script_name"
+    else
+        log_json "info" "$script_name already exists locally"
+    fi
+}
+
 # Install AutoUpdater
 install_autoupdater() {
     log_json "info" "Installing AutoUpdater" "autoupdater"
     
-    # Check if install-updater.sh exists
-    local updater_script="$SCRIPT_DIR/install-updater.sh"
-    if [ ! -f "$updater_script" ]; then
-        log_json "error" "install-updater.sh not found at $updater_script"
-        exit 1
-    fi
+    # Download install-updater.sh if not present
+    download_script "install-updater.sh"
     
-    # Make it executable
-    chmod +x "$updater_script"
+    local updater_script="$SCRIPT_DIR/install-updater.sh"
     
     # Run the updater installation
     log_json "info" "Running AutoUpdater installation script"
