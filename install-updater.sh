@@ -1,21 +1,35 @@
 #!/bin/bash
 
 # AutoUpdater Installation Script
-# Usage: ./installation.sh <app-name> <git-compose-url> <computer-name>
-# Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400
+# Usage: ./install-updater.sh <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]
+# Example: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+# Example with Docker auth: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg
 
 set -e
 
 # Check parameters
-if [ $# -ne 3 ]; then
-    echo "Usage: $0 <app-name> <git-compose-url> <computer-name>"
-    echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git POC-400"
+if [ $# -lt 3 ] || [ $# -gt 5 ]; then
+    echo "Usage: $0 <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"
+    echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI"
+    echo "Example with Docker auth: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg"
     exit 1
 fi
 
 APP_NAME="$1"
 GIT_COMPOSE_URL="$2"
 COMPUTER_NAME="$3"
+DOCKER_AUTH="${4:-}"
+DOCKER_REGISTRY_URL="${5:-}"
+
+# Validate Docker parameters - both must be provided or both empty
+if [ -n "$DOCKER_AUTH" ] && [ -z "$DOCKER_REGISTRY_URL" ]; then
+    log_error "docker-registry-url must be provided when docker-auth is specified"
+    exit 1
+fi
+if [ -z "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
+    log_error "docker-auth must be provided when docker-registry-url is specified"
+    exit 1
+fi
 
 # Configuration
 DEFAULT_USER="deploy"
@@ -156,8 +170,8 @@ create_configuration() {
       "RepositoryLocation": "/data/$APP_NAME",
       "RepositoryUrl": "$GIT_COMPOSE_URL",
       "DockerComposeDirectory": "./",
-      "DockerAuth": "",
-      "DockerRegistryUrl": ""
+      "DockerAuth": "${DOCKER_AUTH:-}",
+      "DockerRegistryUrl": "${DOCKER_REGISTRY_URL:-}"
     }
   ]
 }

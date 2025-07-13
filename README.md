@@ -16,7 +16,7 @@ wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/mas
 chmod +x install.sh
 
 # Run with your application details
-sudo ./install.sh <app-name> <git-compose-url> <computer-name>
+sudo ./install.sh <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]
 
 # Example for RocketWelder:
 sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
@@ -102,7 +102,9 @@ The configuration separates packages into two categories:
 
 ## Installation Script Parameters
 
-The installation script accepts three required parameters:
+The installation script accepts three required parameters and two optional parameters:
+
+### Required Parameters
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
@@ -110,15 +112,45 @@ The installation script accepts three required parameters:
 | `git-compose-url` | Git repository URL for your application's compose configuration | `https://github.com/modelingevolution/rocketwelder-compose.git` |
 | `computer-name` | Unique identifier for this deployment/computer | `RESRV-AI` |
 
+### Optional Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `docker-auth` | Docker registry Personal Access Token (PAT) for private registries | `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `docker-registry-url` | Docker registry URL (without trailing slash) | `ghcr.io/myorg` |
+
+### Usage Syntax
+
+```bash
+# Basic usage (public registries only)
+sudo ./install.sh [--json] <app-name> <git-compose-url> <computer-name>
+
+# With Docker authentication (for private registries)
+sudo ./install.sh [--json] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]
+```
+
 ### Example Usage
 
 ```bash
-# For RocketWelder on RESRV-AI
+# For RocketWelder on RESRV-AI (public registry)
 sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
-# For a different application
-sudo ./install.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
+# For a private registry with authentication
+sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ghcr.io/modelingevolution
+
+# With JSON output for automation
+sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD-001
 ```
+
+### Docker Registry Authentication
+
+When `docker-auth` and `docker-registry-url` are provided:
+
+1. **Docker Login**: The script automatically logs into the specified Docker registry using the provided PAT
+2. **Configuration Update**: The registry URL and authentication are added to the application configuration
+3. **Image Access**: Enables pulling private Docker images from authenticated registries like GitHub Container Registry (GHCR)
+
+**Security Note**: The Docker authentication token is used only for login and stored in the configuration for the AutoUpdater to access private registries. Ensure your PAT has only the necessary permissions (typically `read:packages`).
 
 ## Directory Structure
 

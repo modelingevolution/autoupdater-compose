@@ -63,6 +63,17 @@ sed -e "s/{{INSTALL_UPDATER_CHECKSUM}}/$INSTALL_UPDATER_CHECKSUM/g" \
 # Make the output file executable
 chmod +x "$OUTPUT_FILE"
 
+# Also make other scripts executable
+if [ -f "$SCRIPT_DIR/uninstall.sh" ]; then
+    chmod +x "$SCRIPT_DIR/uninstall.sh"
+    log_info "Made uninstall.sh executable"
+fi
+
+if [ -f "$SCRIPT_DIR/install-updater.sh" ]; then
+    chmod +x "$SCRIPT_DIR/install-updater.sh"
+    log_info "Made install-updater.sh executable"
+fi
+
 log_info "Successfully generated $OUTPUT_FILE with updated checksums"
 
 # Verify the generated file
