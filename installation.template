@@ -138,9 +138,19 @@ install_docker() {
         if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
             # Install standalone docker-compose for Ubuntu 20.04
             DOCKER_COMPOSE_VERSION="2.20.2"
-            curl -fsSL "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+            # Detect architecture
+            ARCH=$(uname -m)
+            case $ARCH in
+                x86_64) DOCKER_ARCH="x86_64" ;;
+                aarch64|arm64) DOCKER_ARCH="aarch64" ;;
+                *) 
+                    log_json "error" "Unsupported architecture: $ARCH"
+                    exit 1
+                    ;;
+            esac
+            curl -fsSL "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${DOCKER_ARCH}" -o /usr/local/bin/docker-compose
             chmod +x /usr/local/bin/docker-compose
-            log_json "info" "Docker Compose standalone installed successfully"
+            log_json "info" "Docker Compose standalone installed successfully for $ARCH"
         else
             # Install Docker Compose plugin for newer Ubuntu versions
             apt-get install -y -qq docker-compose-plugin
