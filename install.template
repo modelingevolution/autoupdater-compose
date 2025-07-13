@@ -283,8 +283,15 @@ docker_login() {
     if [ -n "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
         log_json "info" "Logging into Docker registry: $DOCKER_REGISTRY_URL" "docker-login"
         
-        # Login to Docker registry using the provided token
-        if echo "$DOCKER_AUTH" | docker login "$DOCKER_REGISTRY_URL" --username "token" --password-stdin; then
+        # Determine username based on registry type
+        local username="token"
+        if [[ "$DOCKER_REGISTRY_URL" == *".azurecr.io"* ]]; then
+            # For Azure Container Registry, extract registry name as username
+            username=$(echo "$DOCKER_REGISTRY_URL" | sed 's/\.azurecr\.io.*//')
+        fi
+        
+        # Login to Docker registry using the provided credentials
+        if echo "$DOCKER_AUTH" | docker login "$DOCKER_REGISTRY_URL" --username "$username" --password-stdin; then
             log_json "info" "Successfully logged into Docker registry"
         else
             log_json "error" "Failed to login to Docker registry $DOCKER_REGISTRY_URL"
