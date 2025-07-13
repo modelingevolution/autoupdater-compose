@@ -83,7 +83,6 @@ create_directories() {
     mkdir -p "$CONFIG_BASE"
     mkdir -p "$AUTOUPDATER_CONFIG"
     mkdir -p "/var/docker/data/autoupdater/.ssh"
-    mkdir -p "$CONFIG_BASE/repositories"
     
     # Set proper permissions
     chown -R "$DEFAULT_USER:$DEFAULT_USER" "$CONFIG_BASE"
@@ -134,50 +133,21 @@ generate_ssh_keys() {
 create_configuration() {
     log_info "Creating configuration files for $APP_NAME on $COMPUTER_NAME"
     
-    # Create docker-compose.yml
-    cat > "$AUTOUPDATER_CONFIG/docker-compose.yml" << EOF
-services:
-  modelingevolution.autoupdater.host:
-    image: \${DOCKER_REGISTRY_URL:-}modelingevolution/autoupdater:\${AUTOUPDATER_VERSION:-1.0.22}
-    container_name: autoupdater
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      # Mount Docker socket for container management
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Data volume for persistent storage
-      - /var/docker/configuration:/data
-      # SSH keys for authentication
-      - /var/docker/data/autoupdater/.ssh:/data/ssh:ro
-      # Production configuration
-      - /var/docker/configuration/autoupdater/appsettings.Production.json:/app/appsettings.Production.json:ro
-      - /var/docker/data/autoupdater/appsettings.override.json:/app/appsettings.override.json
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
-      # SSH Configuration
-      - SshUser=$DEFAULT_USER
-      - SshAuthMethod=PrivateKey
-      - SshKeyPath=/data/ssh/id_rsa
-      # Host configuration
-      - HostAddress=172.17.0.1
-      - ComputerName=$COMPUTER_NAME
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - autoupdater-network
+    # Clone the autoupdater-compose repository to the autoupdater directory
+    if [ ! -d "$AUTOUPDATER_CONFIG/.git" ]; then
+        # Remove the directory if it exists but is not a git repo
+        if [ -d "$AUTOUPDATER_CONFIG" ]; then
+            rm -rf "$AUTOUPDATER_CONFIG"
+        fi
+        
+        log_info "Cloning autoupdater-compose repository..."
+        if ! sudo -u "$DEFAULT_USER" git clone https://github.com/modelingevolution/autoupdater-compose.git "$AUTOUPDATER_CONFIG"; then
+            log_error "Failed to clone autoupdater-compose repository"
+            exit 1
+        fi
+    fi
 
-networks:
-  autoupdater-network:
-    driver: bridge
-EOF
-
-    # Create appsettings.Production.json
+    # Create appsettings.Production.json (gitignored file)
     cat > "$AUTOUPDATER_CONFIG/appsettings.Production.json" << EOF
 {
   "Logging": {
@@ -223,19 +193,10 @@ AUTOUPDATER_VERSION=1.0.22
 DOCKER_REGISTRY_URL=
 EOF
 
-    # Set proper ownership
+    # Set proper ownership for the git repository (must be deploy user to allow git operations)
     chown -R "$DEFAULT_USER:$DEFAULT_USER" "$AUTOUPDATER_CONFIG"
     
-    # Pre-clone the autoupdater-compose repository directly in CONFIG_BASE
-    if [ ! -d "$CONFIG_BASE/autoupdater" ]; then
-        log_info "Cloning autoupdater-compose repository..."
-        if ! sudo -u "$DEFAULT_USER" git clone https://github.com/modelingevolution/autoupdater-compose.git "$CONFIG_BASE/autoupdater"; then
-            log_error "Failed to clone autoupdater-compose repository"
-            exit 1
-        fi
-    fi
-    
-    # Pre-clone the application repository
+    # Clone the application repository
     if [ ! -d "$CONFIG_BASE/$APP_NAME" ]; then
         log_info "Cloning application repository: $GIT_COMPOSE_URL"
         if ! sudo -u "$DEFAULT_USER" git clone "$GIT_COMPOSE_URL" "$CONFIG_BASE/$APP_NAME"; then
@@ -244,14 +205,15 @@ EOF
         fi
     fi
     
-    # Fix ownership of all repositories for container access (container runs as root)
-    if ! sudo chown -R root:root "$CONFIG_BASE/autoupdater"; then
-        log_error "Failed to change ownership of autoupdater directory"
+    # Fix ownership of application repository for container access (container runs as root for git operations)
+    if ! sudo chown -R root:root "$CONFIG_BASE/$APP_NAME"; then
+        log_error "Failed to change ownership of $APP_NAME directory"
         exit 1
     fi
     
-    if ! sudo chown -R root:root "$CONFIG_BASE/$APP_NAME"; then
-        log_error "Failed to change ownership of $APP_NAME directory"
+    # Keep autoupdater directory owned by deploy user for git operations
+    if ! sudo chown -R "$DEFAULT_USER:$DEFAULT_USER" "$AUTOUPDATER_CONFIG"; then
+        log_error "Failed to set proper ownership of autoupdater directory"
         exit 1
     fi
     
