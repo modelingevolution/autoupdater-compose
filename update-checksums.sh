@@ -7,8 +7,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE_FILE="$SCRIPT_DIR/installation.template"
-OUTPUT_FILE="$SCRIPT_DIR/installation.sh"
+TEMPLATE_FILE="$SCRIPT_DIR/install.template"
+OUTPUT_FILE="$SCRIPT_DIR/install.sh"
 CHECKSUMS_FILE="$SCRIPT_DIR/checksums.txt"
 
 # Colors for output

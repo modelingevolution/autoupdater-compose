@@ -10,8 +10,8 @@
 # Security: All downloaded scripts are verified using SHA256 checksums
 # Checksums are automatically updated by update-checksums.sh (run via pre-commit hook)
 #
-# Usage: ./installation.sh [--json] <app-name> <git-compose-url> <computer-name>
-# Example: ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+# Usage: ./install.sh [--json] <app-name> <git-compose-url> <computer-name>
+# Example: ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 set -e
 

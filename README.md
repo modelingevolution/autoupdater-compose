@@ -12,14 +12,14 @@ Use the installation script for a complete setup:
 
 ```bash
 # Download and run the installation script
-wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/installation.sh
-chmod +x installation.sh
+wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/install.sh
+chmod +x install.sh
 
 # Run with your application details
-sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
+sudo ./install.sh <app-name> <git-compose-url> <computer-name>
 
 # Example for RocketWelder:
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 ```
 
 The script will:
@@ -114,10 +114,10 @@ The installation script accepts three required parameters:
 
 ```bash
 # For RocketWelder on RESRV-AI
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 # For a different application
-sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
+sudo ./install.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
 ```
 
 ## Directory Structure

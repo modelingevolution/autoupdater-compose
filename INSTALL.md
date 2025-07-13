@@ -3,19 +3,19 @@
 ## One-Command Installation
 
 ```bash
-wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/installation.sh
-chmod +x installation.sh
-sudo ./installation.sh <app-name> <git-compose-url> <computer-name>
+wget https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/install.sh
+chmod +x install.sh
+sudo ./install.sh <app-name> <git-compose-url> <computer-name>
 ```
 
 ## Examples
 
 ```bash
 # RocketWelder on RESRV-AI
-sudo ./installation.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+sudo ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 # Custom app
-sudo ./installation.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
+sudo ./install.sh my-app https://github.com/myorg/my-app-compose.git PROD-001
 ```
 
 ## What It Does
