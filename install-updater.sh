@@ -147,30 +147,10 @@ create_configuration() {
         fi
     fi
 
-    # Create appsettings.Production.json (gitignored file)
+    # Create appsettings.Production.json (gitignored file) - only overrides for this installation
     cat > "$AUTOUPDATER_CONFIG/appsettings.Production.json" << EOF
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "SshUser": "$DEFAULT_USER",
-  "SshPwd": "dummy",
-  "SshAuthMethod": "PrivateKey",
-  "SshKeyPath": "/data/ssh/id_rsa",
-  "HostAddress": "172.17.0.1",
   "ComputerName": "$COMPUTER_NAME",
-  "StdPackages": [
-    {
-      "RepositoryLocation": "/data/autoupdater",
-      "RepositoryUrl": "https://github.com/modelingevolution/autoupdater-compose.git",
-      "DockerComposeDirectory": "./",
-      "DockerAuth": "",
-      "DockerRegistryUrl": ""
-    }
-  ],
   "Packages": [
     {
       "RepositoryLocation": "/data/$APP_NAME",
