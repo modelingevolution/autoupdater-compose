@@ -287,6 +287,13 @@ main() {
     check_root
     detect_ubuntu_version
     
+    # Install curl if not present (needed for downloads)
+    if ! command -v curl &> /dev/null; then
+        log_json "info" "Installing curl"
+        apt-get update -qq
+        apt-get install -y -qq curl
+    fi
+    
     # Step 1: Install Docker and Docker Compose
     install_docker
     
