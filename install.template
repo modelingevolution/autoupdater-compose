@@ -15,6 +15,9 @@
 
 set -e
 
+# Configuration variables
+AUTOUPDATER_VERSION="1.0.29"  # Semantic version with REST API support
+
 # Global variables
 JSON_OUTPUT=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -317,12 +320,12 @@ install_autoupdater() {
     # Run the updater installation with Docker parameters
     log_json "info" "Running AutoUpdater installation script"
     if [ -n "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
-        if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME" "$DOCKER_AUTH" "$DOCKER_REGISTRY_URL"; then
+        if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME" "$DOCKER_AUTH" "$DOCKER_REGISTRY_URL" "$AUTOUPDATER_VERSION"; then
             log_json "error" "AutoUpdater installation failed"
             exit 1
         fi
     else
-        if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME"; then
+        if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME" "" "" "$AUTOUPDATER_VERSION"; then
             log_json "error" "AutoUpdater installation failed"
             exit 1
         fi
