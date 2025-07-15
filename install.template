@@ -16,7 +16,7 @@
 set -e
 
 # Configuration variables
-AUTOUPDATER_VERSION="1.0.29"  # Semantic version with REST API support
+AUTOUPDATER_VERSION="1.0.31"  # Semantic version with SSH host configuration fix
 
 # Global variables
 JSON_OUTPUT=false
