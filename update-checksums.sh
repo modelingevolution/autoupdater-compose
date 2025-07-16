@@ -47,17 +47,28 @@ else
     exit 1
 fi
 
+AUTOUPDATER_SH_CHECKSUM=""
+if [ -f "$SCRIPT_DIR/autoupdater.sh" ]; then
+    AUTOUPDATER_SH_CHECKSUM=$(sha256sum "$SCRIPT_DIR/autoupdater.sh" | cut -d' ' -f1)
+    log_info "autoupdater.sh checksum: $AUTOUPDATER_SH_CHECKSUM"
+else
+    log_error "autoupdater.sh not found!"
+    exit 1
+fi
+
 # Update checksums.txt file
 log_info "Updating $CHECKSUMS_FILE..."
 echo "# SHA256 checksums for dependent scripts" > "$CHECKSUMS_FILE"
 echo "# Generated on $(date)" >> "$CHECKSUMS_FILE"
 echo "" >> "$CHECKSUMS_FILE"
 echo "$INSTALL_UPDATER_CHECKSUM  install-updater.sh" >> "$CHECKSUMS_FILE"
+echo "$AUTOUPDATER_SH_CHECKSUM  autoupdater.sh" >> "$CHECKSUMS_FILE"
 
 log_info "Generating $OUTPUT_FILE from template..."
 
 # Replace placeholders in template
 sed -e "s/{{INSTALL_UPDATER_CHECKSUM}}/$INSTALL_UPDATER_CHECKSUM/g" \
+    -e "s/{{AUTOUPDATER_SH_CHECKSUM}}/$AUTOUPDATER_SH_CHECKSUM/g" \
     "$TEMPLATE_FILE" > "$OUTPUT_FILE"
 
 # Make the output file executable
@@ -72,6 +83,11 @@ fi
 if [ -f "$SCRIPT_DIR/install-updater.sh" ]; then
     chmod +x "$SCRIPT_DIR/install-updater.sh"
     log_info "Made install-updater.sh executable"
+fi
+
+if [ -f "$SCRIPT_DIR/autoupdater.sh" ]; then
+    chmod +x "$SCRIPT_DIR/autoupdater.sh"
+    log_info "Made autoupdater.sh executable"
 fi
 
 log_info "Successfully generated $OUTPUT_FILE with updated checksums"

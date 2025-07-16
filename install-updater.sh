@@ -4,7 +4,7 @@
 # Usage: ./install-updater.sh <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url] [autoupdater-version]
 # Example: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 # Example with Docker auth: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg
-# Example with version: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI "" "" 1.0.23
+# Example with version: ./install-updater.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI "" "" 1.0.32
 
 set -e
 
@@ -13,7 +13,7 @@ if [ $# -lt 3 ] || [ $# -gt 6 ]; then
     echo "Usage: $0 <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url] [autoupdater-version]"
     echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI"
     echo "Example with Docker auth: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg"
-    echo "Example with version: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI \"\" \"\" 1.0.23"
+    echo "Example with version: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI \"\" \"\" 1.0.32"
     exit 1
 fi
 
@@ -22,7 +22,7 @@ GIT_COMPOSE_URL="$2"
 COMPUTER_NAME="$3"
 DOCKER_AUTH="${4:-}"
 DOCKER_REGISTRY_URL="${5:-}"
-AUTOUPDATER_VERSION="${6:-1.0.22}"  # Default to 1.0.22 if not provided for backward compatibility
+AUTOUPDATER_VERSION="${6:-1.0.32}"  # Default to 1.0.32 if not provided for backward compatibility
 
 # Validate Docker parameters - both must be provided or both empty
 if [ -n "$DOCKER_AUTH" ] && [ -z "$DOCKER_REGISTRY_URL" ]; then
