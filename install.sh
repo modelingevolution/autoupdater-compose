@@ -87,6 +87,7 @@ parse_arguments() {
     
     # Initialize logging with parsed options
     init_logging
+}
 
 # Check if running as root
 check_root() {
