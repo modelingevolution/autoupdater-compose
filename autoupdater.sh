@@ -114,10 +114,21 @@ api_call() {
 # Command implementations
 cmd_health() {
     log_info "Checking AutoUpdater health..."
-    if api_call GET "/health"; then
+    
+    # Health endpoint is at /health, not /api/health
+    local health_url="$AUTOUPDATER_BASE_URL/health"
+    local response
+    local http_code
+    
+    response=$(curl -s -w "\n%{http_code}" "$health_url")
+    http_code=$(echo "$response" | tail -n1)
+    response=$(echo "$response" | sed '$d')
+    
+    if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
         log_info "AutoUpdater is healthy"
+        return 0
     else
-        log_error "Health check failed"
+        log_error "Health check failed with status $http_code"
         return 1
     fi
 }
