@@ -342,15 +342,15 @@ install_autoupdater() {
 trigger_application_deployment() {
     log_json "info" "Triggering application deployment" "deployment"
     
-    local autoupdater_script="$SCRIPT_DIR/autoupdater.sh"
     local max_retries=30
     local retry_delay=10
+    local autoupdater_url="http://localhost:8080"
     
     # Wait for AutoUpdater to become healthy
     log_json "info" "Waiting for AutoUpdater to become healthy..."
     local retry_count=0
     while [ $retry_count -lt $max_retries ]; do
-        if "$autoupdater_script" health >/dev/null 2>&1; then
+        if curl -s -f "$autoupdater_url/health" >/dev/null 2>&1; then
             log_json "info" "AutoUpdater is healthy"
             break
         fi
@@ -367,7 +367,7 @@ trigger_application_deployment() {
     
     # Trigger deployment for the application
     log_json "info" "Triggering deployment for $APP_NAME"
-    if ! "$autoupdater_script" update "$APP_NAME"; then
+    if ! curl -s -f -X POST "$autoupdater_url/api/update/$APP_NAME" >/dev/null 2>&1; then
         log_json "warn" "Failed to trigger deployment for $APP_NAME - this may be expected on first installation"
         log_json "info" "AutoUpdater will automatically deploy the application on next update cycle"
     else
