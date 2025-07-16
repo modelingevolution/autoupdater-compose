@@ -29,7 +29,7 @@ GIT_COMPOSE_URL="$2"
 COMPUTER_NAME="$3"
 DOCKER_AUTH="${4:-}"
 DOCKER_REGISTRY_URL="${5:-}"
-AUTOUPDATER_VERSION="${6:-1.0.32}"  # Default to 1.0.32 if not provided for backward compatibility
+  # Default to 1.0.32 if not provided for backward compatibility
 
 # Validate Docker parameters - both must be provided or both empty
 if [ -n "$DOCKER_AUTH" ] && [ -z "$DOCKER_REGISTRY_URL" ]; then
