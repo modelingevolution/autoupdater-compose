@@ -180,6 +180,13 @@ create_configuration() {
 }
 EOF
 
+    # Create appsettings.override.json file for runtime configuration
+    cat > "/var/docker/data/autoupdater/appsettings.override.json" << EOF
+{
+  "ComputerName": "$COMPUTER_NAME"
+}
+EOF
+
     # Create .env file
     cat > "$AUTOUPDATER_CONFIG/.env" << EOF
 # AutoUpdater Configuration for $COMPUTER_NAME
