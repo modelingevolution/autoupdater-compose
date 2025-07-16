@@ -17,13 +17,12 @@ services:
       - /var/docker/data/autoupdater/appsettings.override.json:/app/appsettings.override.json
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
       # SSH Configuration
       - SshUser=${SSH_USER:-deploy}
       - SshAuthMethod=PrivateKey
       - SshKeyPath=/data/ssh/id_rsa
-      # Optional: Override default host address
-      - HostAddress=${HOST_ADDRESS:-172.17.0.1}
+      
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

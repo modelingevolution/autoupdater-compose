@@ -47,3 +47,38 @@ sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD
 - Logs: `docker logs -f autoupdater`
 
 The autoupdater will automatically pull and deploy updates when new Git tags are detected.
+
+## Troubleshooting
+
+### Installation Stuck at Health Check
+
+If the installation script gets stuck during health checks:
+
+```bash
+# Check if AutoUpdater is running
+docker ps | grep autoupdater
+
+# Test health endpoint manually
+curl http://localhost:8080/health
+
+# Check autoupdater logs
+docker logs autoupdater
+
+# Common issue: Health endpoint should be /health, not /api/health
+# This was fixed in AutoUpdater version 1.0.32
+```
+
+### ACR Authentication Issues
+
+For Azure Container Registry authentication:
+
+```bash
+# Verify Docker login worked
+docker images | grep rocketwelder.azurecr.io
+
+# Test ACR connectivity
+docker pull rocketwelder.azurecr.io/rocketwelder:latest
+
+# Note: Use repository-scoped tokens with username "RESRV-AI-token"
+# not the registry name as username
+```

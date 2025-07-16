@@ -79,6 +79,14 @@ The configuration separates packages into two categories:
   - Your applications (like RocketWelder) go here
   - Updated after StdPackages are up-to-date
 
+### AutoUpdater Version
+
+The current stable version used in the installation script is **1.0.32**, which includes:
+- Proper SSH host configuration for secure deployments
+- Fixed health endpoint at `/health` (not `/api/health`)
+- Automatic application deployment triggering after AutoUpdater becomes healthy
+- Improved Azure Container Registry (ACR) repository-scoped token authentication
+
 ### Example Configuration
 
 ```json
@@ -209,6 +217,22 @@ After installation, the following structure is created:
 
 ## Troubleshooting
 
+### Health Check Issues
+
+If the installation gets stuck during health checks:
+
+```bash
+# Test health endpoint directly
+curl http://localhost:8080/health
+
+# Check autoupdater.sh health command
+./autoupdater.sh health
+
+# Common issue: Wrong health endpoint
+# The health endpoint is at /health, not /api/health
+# This was fixed in version 1.0.32
+```
+
 ### SSH Connection Issues
 ```bash
 # Test SSH connectivity
@@ -240,6 +264,25 @@ The autoupdater will automatically update itself when new versions are tagged in
 
 1. Tag a new version in this repository
 2. The autoupdater will detect and apply the update within its polling interval
+
+### Version Management
+
+For development and maintenance, use the `update-version.sh` utility:
+
+```bash
+# Check for latest AutoUpdater version on Docker Hub
+./update-version.sh
+
+# This script will:
+# 1. Query Docker Hub for the latest version
+# 2. Update all relevant files with the new version
+# 3. Regenerate checksums for dependent scripts
+```
+
+The script automatically updates:
+- `install.template` (template for generated install.sh)
+- `install-updater.sh` (AutoUpdater installation script)
+- `checksums.txt` (SHA256 checksums for script verification)
 
 ## License
 
