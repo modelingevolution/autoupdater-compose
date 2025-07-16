@@ -17,7 +17,7 @@
 set -e
 
 # Configuration variables
-AUTOUPDATER_VERSION="1.0.37"  # Replaced from autoupdater.version file
+AUTOUPDATER_VERSION="1.0.38"  # Replaced from autoupdater.version file
 
 # Global variables
 JSON_OUTPUT=false
