@@ -63,6 +63,50 @@ check_root() {
     fi
 }
 
+# Validate SSH access and sudo permissions
+validate_ssh_access() {
+    local private_key="$1"
+    local username="$2"
+    
+    log_info "Validating SSH access and sudo permissions for $username"
+    
+    # Wait a moment for SSH service to be ready
+    sleep 2
+    
+    # Test SSH connection
+    if ssh -i "$private_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$username@127.0.0.1" "echo 'SSH connection successful'" >/dev/null 2>&1; then
+        log_info "✓ SSH connection test passed"
+    else
+        log_error "✗ SSH connection test failed"
+        return 1
+    fi
+    
+    # Test sudo access for Docker commands
+    if ssh -i "$private_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$username@127.0.0.1" "sudo docker --version" >/dev/null 2>&1; then
+        log_info "✓ Sudo Docker access test passed"
+    else
+        log_error "✗ Sudo Docker access test failed"
+        return 1
+    fi
+    
+    # Test Docker Compose access
+    local compose_cmd="docker-compose"
+    if command -v docker-compose &>/dev/null; then
+        compose_cmd="docker-compose"
+    else
+        compose_cmd="docker compose"
+    fi
+    
+    if ssh -i "$private_key" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$username@127.0.0.1" "sudo $compose_cmd --version" >/dev/null 2>&1; then
+        log_info "✓ Sudo Docker Compose access test passed"
+    else
+        log_error "✗ Sudo Docker Compose access test failed"
+        return 1
+    fi
+    
+    log_info "All SSH and sudo validation tests passed"
+}
+
 # Create deploy user
 create_deploy_user() {
     local username=${1:-$DEFAULT_USER}
@@ -80,6 +124,15 @@ create_deploy_user() {
         
         log_info "User $username created and added to docker group"
     fi
+    
+    # Configure sudo access for deploy user (no password required for Docker operations)
+    local sudoers_file="/etc/sudoers.d/$username"
+    cat > "$sudoers_file" << EOF
+# Allow $username to run Docker commands without password
+$username ALL=(ALL) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/local/bin/docker-compose
+EOF
+    chmod 440 "$sudoers_file"
+    log_info "Sudo access configured for $username (passwordless Docker commands)"
     
     # Ensure user can access docker socket
     if [ -S /var/run/docker.sock ]; then
@@ -140,6 +193,9 @@ generate_ssh_keys() {
     sudo chown -R "$DEFAULT_USER:$DEFAULT_USER" "$deploy_ssh_dir"
     
     log_info "SSH public key installed for local deploy user"
+    
+    # Validate SSH access and sudo permissions
+    validate_ssh_access "$private_key" "$DEFAULT_USER"
 }
 
 # Create configuration files
