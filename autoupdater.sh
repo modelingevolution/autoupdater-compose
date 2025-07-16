@@ -97,7 +97,12 @@ api_call() {
         echo "$response"
         return 0
     elif [ "$http_code" = "404" ]; then
-        log_error "Package not found"
+        # Handle 404 differently based on endpoint
+        if [[ "$endpoint" == "/health" ]]; then
+            log_error "AutoUpdater service not available"
+        else
+            log_error "Package not found"
+        fi
         return 1
     else
         log_error "API call failed with status $http_code"
