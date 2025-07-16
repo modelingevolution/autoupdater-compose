@@ -24,6 +24,13 @@ JSON_OUTPUT=false
 VERBOSE=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Download logging.sh first if not present
+if [ ! -f "$SCRIPT_DIR/logging.sh" ]; then
+    echo "Downloading logging.sh..."
+    curl -fsSL "https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/logging.sh" -o "$SCRIPT_DIR/logging.sh"
+    chmod +x "$SCRIPT_DIR/logging.sh"
+fi
+
 # Source logging library
 source "$SCRIPT_DIR/logging.sh"
 
@@ -316,8 +323,14 @@ install_autoupdater() {
     local AUTOUPDATER_SH_CHECKSUM="c99fc6b70a7f6e1691dbdadf2b0369b3c2ad7564f6c59a1de42455e974f9cf6a"
     local LOGGING_SH_CHECKSUM="b488f9af1faaff4d5caa1837093b6e99c59df6751f8a0715a24f93afcbfae7e7"
     
-    # Download and verify logging.sh (required by other scripts)
-    download_script "logging.sh" "$LOGGING_SH_CHECKSUM"
+    # Verify logging.sh checksum (already downloaded at script start)
+    local current_logging_checksum=$(sha256sum "$SCRIPT_DIR/logging.sh" | cut -d' ' -f1)
+    if [ "$current_logging_checksum" != "$LOGGING_SH_CHECKSUM" ]; then
+        log_warn "logging.sh checksum mismatch, re-downloading"
+        download_script "logging.sh" "$LOGGING_SH_CHECKSUM"
+    else
+        log_info "logging.sh checksum verified"
+    fi
     
     # Download and verify install-updater.sh
     download_script "install-updater.sh" "$INSTALL_UPDATER_CHECKSUM"
