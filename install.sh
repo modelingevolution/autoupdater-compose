@@ -10,8 +10,9 @@
 # Security: All downloaded scripts are verified using SHA256 checksums
 # Checksums are automatically updated by update-checksums.sh (run via pre-commit hook)
 #
-# Usage: ./install.sh [--json] <app-name> <git-compose-url> <computer-name>
+# Usage: ./install.sh [--json] [--verbose|-v] <app-name> <git-compose-url> <computer-name>
 # Example: ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+# Example with verbose: ./install.sh -v rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 
 set -e
 
@@ -20,22 +21,43 @@ AUTOUPDATER_VERSION="1.0.32"  # Semantic version with proper SSH host configurat
 
 # Global variables
 JSON_OUTPUT=false
+VERBOSE=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source logging library
+source "$SCRIPT_DIR/logging.sh"
 
 # Parse arguments
 parse_arguments() {
-    if [[ "$1" == "--json" ]]; then
-        JSON_OUTPUT=true
-        shift
-    fi
+    # Process flags
+    while [[ "$1" =~ ^- ]]; do
+        case "$1" in
+            --json)
+                JSON_OUTPUT=true
+                shift
+                ;;
+            --verbose|-v)
+                VERBOSE=true
+                shift
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
     
     if [ $# -lt 3 ] || [ $# -gt 5 ]; then
         if [ "$JSON_OUTPUT" = true ]; then
             echo '{"status":"error","message":"Usage: ./install.sh [--json] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"}'
         else
-            echo "Usage: $0 [--json] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"
+            echo "Usage: $0 [--json] [--verbose|-v] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"
             echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI"
             echo "Example with Docker auth: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg"
+            echo "Options:"
+            echo "  --json      Output in JSON format"
+            echo "  --verbose   Show detailed output"
+            echo "  -v          Same as --verbose"
         fi
         exit 1
     fi
@@ -48,41 +70,21 @@ parse_arguments() {
     
     # Validate Docker parameters - both must be provided or both empty
     if [ -n "$DOCKER_AUTH" ] && [ -z "$DOCKER_REGISTRY_URL" ]; then
-        log_json "error" "docker-registry-url must be provided when docker-auth is specified"
+        log_error "docker-registry-url must be provided when docker-auth is specified"
         exit 1
     fi
     if [ -z "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
-        log_json "error" "docker-auth must be provided when docker-registry-url is specified"
+        log_error "docker-auth must be provided when docker-registry-url is specified"
         exit 1
     fi
-}
-
-# Logging functions
-log_json() {
-    local level="$1"
-    local message="$2"
-    local step="${3:-}"
     
-    if [ "$JSON_OUTPUT" = true ]; then
-        if [ -n "$step" ]; then
-            echo "{\"status\":\"$level\",\"step\":\"$step\",\"message\":\"$message\"}"
-        else
-            echo "{\"status\":\"$level\",\"message\":\"$message\"}"
-        fi
-    else
-        case $level in
-            "info") echo -e "\e[32m[INFO]\e[0m $message" ;;
-            "warn") echo -e "\e[33m[WARN]\e[0m $message" ;;
-            "error") echo -e "\e[31m[ERROR]\e[0m $message" ;;
-            *) echo "$message" ;;
-        esac
-    fi
-}
+    # Initialize logging with parsed options
+    init_logging
 
 # Check if running as root
 check_root() {
     if [ "$EUID" -ne 0 ]; then
-        log_json "error" "This script must be run as root"
+        log_error "This script must be run as root"
         exit 1
     fi
 }
@@ -93,31 +95,31 @@ detect_ubuntu_version() {
         . /etc/os-release
         if [[ "$ID" == "ubuntu" ]]; then
             UBUNTU_VERSION="$VERSION_ID"
-            log_json "info" "Detected Ubuntu $UBUNTU_VERSION"
+            log_info "Detected Ubuntu $UBUNTU_VERSION"
             return 0
         fi
     fi
-    log_json "error" "This script only supports Ubuntu"
+    log_error "This script only supports Ubuntu"
     exit 1
 }
 
 # Install Docker and Docker Compose
 install_docker() {
-    log_json "info" "Installing Docker and Docker Compose" "docker"
+    log_info "Installing Docker and Docker Compose" "docker"
     
     # Check if Docker is already installed
     if command -v docker &> /dev/null; then
-        log_json "info" "Docker already installed, checking version"
+        log_info "Docker already installed, checking version"
         DOCKER_VERSION=$(docker --version)
-        log_json "info" "Current Docker version: $DOCKER_VERSION"
+        log_info "Current Docker version: $DOCKER_VERSION"
     else
-        log_json "info" "Installing Docker"
+        log_info "Installing Docker"
         
         # Update package index
-        apt-get update -qq
+        run_quiet "Updating package index" apt-get update
         
         # Install prerequisites
-        apt-get install -y -qq \
+        run_quiet "Installing Docker prerequisites" apt-get install -y \
             apt-transport-https \
             ca-certificates \
             curl \
@@ -132,23 +134,23 @@ install_docker() {
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         
         # Install Docker Engine
-        apt-get update -qq
-        apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin
+        run_quiet "Updating package index" apt-get update
+        run_quiet "Installing Docker Engine" apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
         
         # Enable and start Docker
         systemctl enable docker
         systemctl start docker
         
-        log_json "info" "Docker installed successfully"
+        log_info "Docker installed successfully"
     fi
     
     # Check Docker Compose
     if command -v docker-compose &> /dev/null; then
-        log_json "info" "Docker Compose (standalone) already installed"
+        log_info "Docker Compose (standalone) already installed"
     elif docker compose version &> /dev/null 2>&1; then
-        log_json "info" "Docker Compose (plugin) already installed"
+        log_info "Docker Compose (plugin) already installed"
     else
-        log_json "info" "Installing Docker Compose"
+        log_info "Installing Docker Compose"
         
         # For Ubuntu 20.04, install standalone docker-compose, for newer versions use plugin
         if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
@@ -160,26 +162,26 @@ install_docker() {
                 x86_64) DOCKER_ARCH="x86_64" ;;
                 aarch64|arm64) DOCKER_ARCH="aarch64" ;;
                 *) 
-                    log_json "error" "Unsupported architecture: $ARCH"
+                    log_error "Unsupported architecture: $ARCH"
                     exit 1
                     ;;
             esac
             curl -fsSL "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${DOCKER_ARCH}" -o /usr/local/bin/docker-compose
             chmod +x /usr/local/bin/docker-compose
-            log_json "info" "Docker Compose standalone installed successfully for $ARCH"
+            log_info "Docker Compose standalone installed successfully for $ARCH"
         else
             # Install Docker Compose plugin for newer Ubuntu versions
-            apt-get install -y -qq docker-compose-plugin
-            log_json "info" "Docker Compose plugin installed successfully"
+            run_quiet "Installing Docker Compose plugin" apt-get install -y docker-compose-plugin
+            log_info "Docker Compose plugin installed successfully"
         fi
     fi
     
-    log_json "info" "Docker installation completed" "docker"
+    log_info "Docker installation completed" "docker"
 }
 
 # Install VPN based on Ubuntu version
 install_vpn() {
-    log_json "info" "Installing VPN" "vpn"
+    log_info "Installing VPN" "vpn"
     
     case "$UBUNTU_VERSION" in
         "20.04")
@@ -189,45 +191,45 @@ install_vpn() {
             install_wireguard
             ;;
         *)
-            log_json "warn" "Unsupported Ubuntu version for VPN installation: $UBUNTU_VERSION"
+            log_warn "Unsupported Ubuntu version for VPN installation: $UBUNTU_VERSION"
             ;;
     esac
     
-    log_json "info" "VPN installation completed" "vpn"
+    log_info "VPN installation completed" "vpn"
 }
 
 # Install OpenVPN for Ubuntu 20.04
 install_openvpn() {
     if command -v openvpn &> /dev/null; then
-        log_json "info" "OpenVPN already installed"
+        log_info "OpenVPN already installed"
         return 0
     fi
     
-    log_json "info" "Installing OpenVPN for Ubuntu 20.04"
+    log_info "Installing OpenVPN for Ubuntu 20.04"
     
-    apt-get update -qq
-    apt-get install -y -qq openvpn easy-rsa
+    run_quiet "Updating package index" apt-get update
+    run_quiet "Installing OpenVPN" apt-get install -y openvpn easy-rsa
     
     # Create easy-rsa directory
     if [ ! -d /etc/openvpn/easy-rsa ]; then
         make-cadir /etc/openvpn/easy-rsa
-        log_json "info" "OpenVPN easy-rsa directory created at /etc/openvpn/easy-rsa"
+        log_info "OpenVPN easy-rsa directory created at /etc/openvpn/easy-rsa"
     fi
     
-    log_json "info" "OpenVPN installed successfully"
+    log_info "OpenVPN installed successfully"
 }
 
 # Install WireGuard for Ubuntu 22.04/24.04
 install_wireguard() {
     if command -v wg &> /dev/null; then
-        log_json "info" "WireGuard already installed"
+        log_info "WireGuard already installed"
         return 0
     fi
     
-    log_json "info" "Installing WireGuard for Ubuntu $UBUNTU_VERSION"
+    log_info "Installing WireGuard for Ubuntu $UBUNTU_VERSION"
     
-    apt-get update -qq
-    apt-get install -y -qq wireguard wireguard-tools
+    run_quiet "Updating package index" apt-get update
+    run_quiet "Installing WireGuard" apt-get install -y wireguard wireguard-tools
     
     # Create WireGuard directory
     if [ ! -d /etc/wireguard ]; then
@@ -235,7 +237,7 @@ install_wireguard() {
         chmod 700 /etc/wireguard
     fi
     
-    log_json "info" "WireGuard installed successfully"
+    log_info "WireGuard installed successfully"
 }
 
 # Download and verify script with checksum
@@ -248,15 +250,15 @@ download_script() {
     # Check if script exists and verify checksum
     if [ ! -f "$script_path" ]; then
         download_needed=true
-        log_json "info" "$script_name not found, downloading from GitHub repository"
+        log_info "$script_name not found, downloading from GitHub repository"
     else
         # Verify existing script checksum
         local current_checksum=$(sha256sum "$script_path" | cut -d' ' -f1)
         if [ "$current_checksum" != "$expected_checksum" ]; then
             download_needed=true
-            log_json "warn" "$script_name checksum mismatch (expected: $expected_checksum, got: $current_checksum), re-downloading"
+            log_warn "$script_name checksum mismatch (expected: $expected_checksum, got: $current_checksum), re-downloading"
         else
-            log_json "info" "$script_name exists and checksum verified"
+            log_info "$script_name exists and checksum verified"
         fi
     fi
     
@@ -264,27 +266,27 @@ download_script() {
         local url="https://raw.githubusercontent.com/modelingevolution/autoupdater-compose/master/$script_name"
         
         if ! curl -fsSL "$url" -o "$script_path"; then
-            log_json "error" "Failed to download $script_name from $url"
+            log_error "Failed to download $script_name from $url"
             exit 1
         fi
         
         # Verify downloaded script checksum
         local downloaded_checksum=$(sha256sum "$script_path" | cut -d' ' -f1)
         if [ "$downloaded_checksum" != "$expected_checksum" ]; then
-            log_json "error" "Downloaded $script_name checksum verification failed (expected: $expected_checksum, got: $downloaded_checksum)"
+            log_error "Downloaded $script_name checksum verification failed (expected: $expected_checksum, got: $downloaded_checksum)"
             rm -f "$script_path"
             exit 1
         fi
         
         chmod +x "$script_path"
-        log_json "info" "Successfully downloaded and verified $script_name"
+        log_info "Successfully downloaded and verified $script_name"
     fi
 }
 
 # Perform Docker login if credentials provided
 docker_login() {
     if [ -n "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
-        log_json "info" "Logging into Docker registry: $DOCKER_REGISTRY_URL" "docker-login"
+        log_info "Logging into Docker registry: $DOCKER_REGISTRY_URL" "docker-login"
         
         # Determine username based on registry type
         local username="token"
@@ -294,24 +296,24 @@ docker_login() {
         fi
         
         # Login to Docker registry using the provided credentials
-        if echo "$DOCKER_AUTH" | docker login "$DOCKER_REGISTRY_URL" --username "$username" --password-stdin; then
-            log_json "info" "Successfully logged into Docker registry"
+        if echo "$DOCKER_AUTH" | docker_quiet login "$DOCKER_REGISTRY_URL" --username "$username" --password-stdin; then
+            log_info "Successfully logged into Docker registry"
         else
-            log_json "error" "Failed to login to Docker registry $DOCKER_REGISTRY_URL"
+            log_error "Failed to login to Docker registry $DOCKER_REGISTRY_URL"
             exit 1
         fi
     else
-        log_json "info" "No Docker registry credentials provided, skipping login"
+        log_info "No Docker registry credentials provided, skipping login"
     fi
 }
 
 # Install AutoUpdater
 install_autoupdater() {
-    log_json "info" "Installing AutoUpdater" "autoupdater"
+    log_info "Installing AutoUpdater" "autoupdater"
     
     # Expected checksums for dependent scripts (auto-generated by update-checksums.sh)
-    local INSTALL_UPDATER_CHECKSUM="733bedf7fb8c64818c91dcec0ec4efccb455ea08617e7de0706e75596d0f56a7"
-    local AUTOUPDATER_SH_CHECKSUM="6d2f5437469f4e77669566f7fb60edda1dad09561c7543b3aeda93c7ea72e950"
+    local INSTALL_UPDATER_CHECKSUM="a07d9bdf5749d88978f5a0224ebd335d22750ed94b7e9057db34d997efc15e81"
+    local AUTOUPDATER_SH_CHECKSUM="c99fc6b70a7f6e1691dbdadf2b0369b3c2ad7564f6c59a1de42455e974f9cf6a"
     
     # Download and verify install-updater.sh
     download_script "install-updater.sh" "$INSTALL_UPDATER_CHECKSUM"
@@ -322,68 +324,68 @@ install_autoupdater() {
     local updater_script="$SCRIPT_DIR/install-updater.sh"
     
     # Run the updater installation with Docker parameters
-    log_json "info" "Running AutoUpdater installation script"
+    log_info "Running AutoUpdater installation script"
     if [ -n "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
         if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME" "$DOCKER_AUTH" "$DOCKER_REGISTRY_URL" "$AUTOUPDATER_VERSION"; then
-            log_json "error" "AutoUpdater installation failed"
+            log_error "AutoUpdater installation failed"
             exit 1
         fi
     else
         if ! "$updater_script" "$APP_NAME" "$GIT_COMPOSE_URL" "$COMPUTER_NAME" "" "" "$AUTOUPDATER_VERSION"; then
-            log_json "error" "AutoUpdater installation failed"
+            log_error "AutoUpdater installation failed"
             exit 1
         fi
     fi
     
-    log_json "info" "AutoUpdater installation completed" "autoupdater"
+    log_info "AutoUpdater installation completed" "autoupdater"
 }
 
 # Trigger application deployment via AutoUpdater REST API
 trigger_application_deployment() {
-    log_json "info" "Triggering application deployment" "deployment"
+    log_info "Triggering application deployment" "deployment"
     
     local autoupdater_script="$SCRIPT_DIR/autoupdater.sh"
     local max_retries=30
     local retry_delay=10
     
     # Wait for AutoUpdater to become healthy
-    log_json "info" "Waiting for AutoUpdater to become healthy..."
+    log_info "Waiting for AutoUpdater to become healthy..."
     local retry_count=0
     while [ $retry_count -lt $max_retries ]; do
         if "$autoupdater_script" health >/dev/null 2>&1; then
-            log_json "info" "AutoUpdater is healthy"
+            log_info "AutoUpdater is healthy"
             break
         fi
         
         retry_count=$((retry_count + 1))
         if [ $retry_count -ge $max_retries ]; then
-            log_json "error" "AutoUpdater health check failed after $max_retries attempts"
-            log_json "info" "Debugging: Let's check what the autoupdater.sh script outputs"
+            log_error "AutoUpdater health check failed after $max_retries attempts"
+            log_info "Debugging: Let's check what the autoupdater.sh script outputs"
             "$autoupdater_script" health || true
             exit 1
         fi
         
-        log_json "info" "Waiting for AutoUpdater to become healthy... (attempt $retry_count/$max_retries)"
+        log_info "Waiting for AutoUpdater to become healthy... (attempt $retry_count/$max_retries)"
         sleep $retry_delay
     done
     
     # Trigger deployment for the application
-    log_json "info" "Triggering deployment for $APP_NAME"
+    log_info "Triggering deployment for $APP_NAME"
     if ! "$autoupdater_script" update "$APP_NAME"; then
-        log_json "warn" "Failed to trigger deployment for $APP_NAME - this may be expected on first installation"
-        log_json "info" "AutoUpdater will automatically deploy the application on next update cycle"
+        log_warn "Failed to trigger deployment for $APP_NAME - this may be expected on first installation"
+        log_info "AutoUpdater will automatically deploy the application on next update cycle"
     else
-        log_json "info" "Application deployment triggered successfully"
+        log_info "Application deployment triggered successfully"
     fi
     
-    log_json "info" "Application deployment completed" "deployment"
+    log_info "Application deployment completed" "deployment"
 }
 
 # Main installation function
 main() {
     parse_arguments "$@"
     
-    log_json "info" "Starting complete installation for $APP_NAME on $COMPUTER_NAME"
+    log_info "Starting complete installation for $APP_NAME on $COMPUTER_NAME"
     
     # Check prerequisites
     check_root
@@ -391,9 +393,9 @@ main() {
     
     # Install curl if not present (needed for downloads)
     if ! command -v curl &> /dev/null; then
-        log_json "info" "Installing curl"
-        apt-get update -qq
-        apt-get install -y -qq curl
+        log_info "Installing curl"
+        run_quiet "Updating package index" apt-get update
+        run_quiet "Installing curl" apt-get install -y curl
     fi
     
     # Step 1: Install Docker and Docker Compose
@@ -414,14 +416,14 @@ main() {
     if [ "$JSON_OUTPUT" = true ]; then
         echo '{"status":"success","message":"Installation completed successfully","app":"'$APP_NAME'","computer":"'$COMPUTER_NAME'","ubuntu_version":"'$UBUNTU_VERSION'"}'
     else
-        log_json "info" "Installation completed successfully!"
+        log_info "Installation completed successfully!"
         echo ""
-        log_json "info" "Summary:"
-        log_json "info" "  - Ubuntu version: $UBUNTU_VERSION"
-        log_json "info" "  - Docker: Installed"
-        log_json "info" "  - VPN: Installed ($([ "$UBUNTU_VERSION" = "20.04" ] && echo "OpenVPN" || echo "WireGuard"))"
-        log_json "info" "  - AutoUpdater: Installed for $APP_NAME"
-        log_json "info" "  - Web UI: http://localhost:8080"
+        log_info "Summary:"
+        log_info "  - Ubuntu version: $UBUNTU_VERSION"
+        log_info "  - Docker: Installed"
+        log_info "  - VPN: Installed ($([ "$UBUNTU_VERSION" = "20.04" ] && echo "OpenVPN" || echo "WireGuard"))"
+        log_info "  - AutoUpdater: Installed for $APP_NAME"
+        log_info "  - Web UI: http://localhost:8080"
     fi
 }
 

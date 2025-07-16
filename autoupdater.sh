@@ -5,35 +5,22 @@
 
 set -e
 
+# Source logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/logging.sh"
+
+# Initialize logging with environment variables
+init_logging
+
 # Default configuration
 AUTOUPDATER_BASE_URL="${AUTOUPDATER_BASE_URL:-http://localhost:8080}"
 AUTOUPDATER_API_BASE="$AUTOUPDATER_BASE_URL/api"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_debug() {
-    if [ "$AUTOUPDATER_DEBUG" = "true" ]; then
-        echo -e "${BLUE}[DEBUG]${NC} $1"
-    fi
-}
+# Logging functions are provided by logging.sh
+# Support legacy AUTOUPDATER_DEBUG environment variable
+if [ "$AUTOUPDATER_DEBUG" = "true" ]; then
+    VERBOSE="true"
+fi
 
 # Help function
 show_help() {
@@ -106,7 +93,9 @@ api_call() {
         return 1
     else
         log_error "API call failed with status $http_code"
-        echo "$response" | jq -r '.title // .error // .' 2>/dev/null || echo "$response"
+        if [ "$VERBOSE" = "true" ]; then
+            echo "$response" | jq -r '.title // .error // .' 2>/dev/null || echo "$response"
+        fi
         return 1
     fi
 }
@@ -159,7 +148,22 @@ cmd_update() {
     fi
     
     log_info "Triggering update for package: $package_name"
-    api_call POST "/update/$package_name"
+    local response
+    response=$(api_call POST "/update/$package_name")
+    if [ $? -eq 0 ]; then
+        if [ "$VERBOSE" = "true" ]; then
+            echo "$response"
+        else
+            # Parse and show only key information
+            local update_id=$(echo "$response" | jq -r '.updateId // empty' 2>/dev/null)
+            local status=$(echo "$response" | jq -r '.status // empty' 2>/dev/null)
+            if [ -n "$update_id" ]; then
+                log_info "Update triggered successfully (ID: $update_id)"
+            else
+                log_info "Update triggered successfully"
+            fi
+        fi
+    fi
 }
 
 cmd_update_all() {

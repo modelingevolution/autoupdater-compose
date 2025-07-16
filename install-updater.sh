@@ -8,6 +8,13 @@
 
 set -e
 
+# Source logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/logging.sh"
+
+# Initialize logging with environment variables
+init_logging
+
 # Check parameters
 if [ $# -lt 3 ] || [ $# -gt 6 ]; then
     echo "Usage: $0 <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url] [autoupdater-version]"
@@ -40,24 +47,7 @@ CONFIG_BASE="/var/docker/configuration"
 AUTOUPDATER_CONFIG="$CONFIG_BASE/autoupdater"
 DOCKER_COMPOSE_CMD="docker-compose"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Helper functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Logging functions are provided by logging.sh
 
 # Check if running as root
 check_root() {
@@ -124,7 +114,7 @@ generate_ssh_keys() {
     fi
     
     # Generate SSH key pair
-    sudo -u "$DEFAULT_USER" ssh-keygen -t rsa -b 4096 -f "$private_key" -N "" -C "autoupdater@$COMPUTER_NAME"
+    run_quiet "Generating SSH keys" sudo -u "$DEFAULT_USER" ssh-keygen -t rsa -b 4096 -f "$private_key" -N "" -C "autoupdater@$COMPUTER_NAME"
     
     # Set proper permissions
     chmod 600 "$private_key"
@@ -158,7 +148,7 @@ create_configuration() {
         fi
         
         log_info "Cloning autoupdater-compose repository..."
-        if ! sudo -u "$DEFAULT_USER" git clone https://github.com/modelingevolution/autoupdater-compose.git "$AUTOUPDATER_CONFIG"; then
+        if ! git_quiet clone https://github.com/modelingevolution/autoupdater-compose.git "$AUTOUPDATER_CONFIG"; then
             log_error "Failed to clone autoupdater-compose repository"
             exit 1
         fi
@@ -200,20 +190,9 @@ EOF
     # Set proper ownership for the git repository (must be deploy user to allow git operations)
     chown -R "$DEFAULT_USER:$DEFAULT_USER" "$AUTOUPDATER_CONFIG"
     
-    # Clone the application repository
-    if [ ! -d "$CONFIG_BASE/$APP_NAME" ]; then
-        log_info "Cloning application repository: $GIT_COMPOSE_URL"
-        if ! sudo -u "$DEFAULT_USER" git clone "$GIT_COMPOSE_URL" "$CONFIG_BASE/$APP_NAME"; then
-            log_error "Failed to clone application repository: $GIT_COMPOSE_URL"
-            exit 1
-        fi
-    fi
-    
-    # Fix ownership of application repository for container access (container runs as root for git operations)
-    if ! sudo chown -R root:root "$CONFIG_BASE/$APP_NAME"; then
-        log_error "Failed to change ownership of $APP_NAME directory"
-        exit 1
-    fi
+    # Application repository will be cloned by AutoUpdater on first run
+    # This maintains proper separation of concerns
+    log_info "Application repository will be managed by AutoUpdater"
     
     # Keep autoupdater directory owned by deploy user for git operations
     if ! sudo chown -R "$DEFAULT_USER:$DEFAULT_USER" "$AUTOUPDATER_CONFIG"; then
@@ -233,9 +212,16 @@ start_autoupdater() {
         exit 1
     }
     
-    if ! sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d; then
-        log_error "Failed to start AutoUpdater container"
-        exit 1
+    if [ "$VERBOSE" = "true" ]; then
+        if ! sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d; then
+            log_error "Failed to start AutoUpdater container"
+            exit 1
+        fi
+    else
+        if ! sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d --quiet-pull 2>&1 | grep -v "Network\|Container\|Creating\|Created\|Starting\|Started" || [ ${PIPESTATUS[0]} -ne 0 ]; then
+            log_error "Failed to start AutoUpdater container"
+            exit 1
+        fi
     fi
     
     # Wait a moment for container to start
