@@ -76,10 +76,21 @@ echo "$LOGGING_SH_CHECKSUM  logging.sh" >> "$CHECKSUMS_FILE"
 
 log_info "Generating $OUTPUT_FILE from template..."
 
+# Read AutoUpdater version from version file
+AUTOUPDATER_VERSION_FILE="$SCRIPT_DIR/autoupdater.version"
+if [ -f "$AUTOUPDATER_VERSION_FILE" ]; then
+    AUTOUPDATER_VERSION=$(cat "$AUTOUPDATER_VERSION_FILE" | tr -d '\n')
+    log_info "AutoUpdater version from file: $AUTOUPDATER_VERSION"
+else
+    log_error "Version file not found: $AUTOUPDATER_VERSION_FILE"
+    exit 1
+fi
+
 # Replace placeholders in template
 sed -e "s/{{INSTALL_UPDATER_CHECKSUM}}/$INSTALL_UPDATER_CHECKSUM/g" \
     -e "s/{{AUTOUPDATER_SH_CHECKSUM}}/$AUTOUPDATER_SH_CHECKSUM/g" \
     -e "s/{{LOGGING_SH_CHECKSUM}}/$LOGGING_SH_CHECKSUM/g" \
+    -e "s/{{AUTOUPDATER_VERSION}}/$AUTOUPDATER_VERSION/g" \
     "$TEMPLATE_FILE" > "$OUTPUT_FILE"
 
 # Make the output file executable

@@ -29,7 +29,13 @@ GIT_COMPOSE_URL="$2"
 COMPUTER_NAME="$3"
 DOCKER_AUTH="${4:-}"
 DOCKER_REGISTRY_URL="${5:-}"
-  # Default to 1.0.32 if not provided for backward compatibility
+AUTOUPDATER_VERSION="$6"  # Must be passed from install.sh
+
+# Validate required parameters
+if [ -z "$AUTOUPDATER_VERSION" ]; then
+    log_error "AUTOUPDATER_VERSION must be provided as 6th parameter"
+    exit 1
+fi
 
 # Validate Docker parameters - both must be provided or both empty
 if [ -n "$DOCKER_AUTH" ] && [ -z "$DOCKER_REGISTRY_URL" ]; then
