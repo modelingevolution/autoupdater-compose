@@ -265,7 +265,7 @@ EOF
     log_info "Configuration files created"
 }
 
-# Start autoupdater
+# Start autoupdater with retry mechanism
 start_autoupdater() {
     log_info "Starting AutoUpdater container"
     
@@ -274,16 +274,78 @@ start_autoupdater() {
         exit 1
     }
     
-    if [ "$VERBOSE" = "true" ]; then
-        if ! sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d; then
-            log_error "Failed to start AutoUpdater container"
-            exit 1
+    # Retry mechanism for docker-compose up
+    local max_retries=3
+    local retry_delay=10
+    local retry_count=0
+    local success=false
+    
+    while [ $retry_count -lt $max_retries ] && [ "$success" = "false" ]; do
+        retry_count=$((retry_count + 1))
+        
+        if [ $retry_count -gt 1 ]; then
+            log_warn "Retry attempt $retry_count/$max_retries after waiting ${retry_delay}s..."
+            sleep $retry_delay
+            
+            # Try to fix common DNS issues before retry
+            if [ $retry_count -eq 2 ]; then
+                log_info "Attempting to resolve DNS issues..."
+                # Force IPv4 for Docker daemon if IPv6 is causing issues
+                if grep -q "::1" /etc/hosts 2>/dev/null; then
+                    log_debug "Detected IPv6 in /etc/hosts"
+                fi
+                # Restart Docker daemon to clear DNS cache
+                if command -v systemctl &> /dev/null; then
+                    log_debug "Restarting Docker service to clear DNS cache..."
+                    run_quiet "Restarting Docker service" systemctl restart docker
+                    sleep 5
+                fi
+            fi
         fi
-    else
-        if ! sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d --quiet-pull 2>&1 | grep -v "Network\|Container\|Creating\|Created\|Starting\|Started" || [ ${PIPESTATUS[0]} -ne 0 ]; then
-            log_error "Failed to start AutoUpdater container"
-            exit 1
+        
+        log_info "Starting AutoUpdater container (attempt $retry_count/$max_retries)..."
+        
+        # Try to pull the image first with explicit retry
+        local pull_output
+        if [ "$VERBOSE" = "true" ]; then
+            pull_output=$(sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD pull 2>&1) && pull_success=true || pull_success=false
+            echo "$pull_output"
+        else
+            pull_output=$(sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD pull 2>&1) && pull_success=true || pull_success=false
         fi
+        
+        if [ "$pull_success" = "false" ]; then
+            log_warn "Failed to pull image: $(echo "$pull_output" | grep -i error | head -1)"
+            if echo "$pull_output" | grep -q "network is unreachable\|dial tcp"; then
+                log_warn "Network connectivity issue detected"
+            fi
+            continue
+        fi
+        
+        # Now try to start the container
+        if [ "$VERBOSE" = "true" ]; then
+            if sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d; then
+                success=true
+            fi
+        else
+            if sudo -u "$DEFAULT_USER" $DOCKER_COMPOSE_CMD up -d --quiet-pull 2>&1 | grep -v "Network\|Container\|Creating\|Created\|Starting\|Started" || [ ${PIPESTATUS[0]} -eq 0 ]; then
+                success=true
+            fi
+        fi
+        
+        if [ "$success" = "false" ]; then
+            log_warn "Failed to start AutoUpdater container on attempt $retry_count"
+        fi
+    done
+    
+    if [ "$success" = "false" ]; then
+        log_error "Failed to start AutoUpdater container after $max_retries attempts"
+        log_error "Common solutions:"
+        log_error "  1. Check internet connectivity: ping -c 1 registry-1.docker.io"
+        log_error "  2. Check DNS resolution: nslookup registry-1.docker.io"
+        log_error "  3. Try using Google DNS: echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf"
+        log_error "  4. Disable IPv6 if causing issues"
+        exit 1
     fi
     
     # Wait a moment for container to start
