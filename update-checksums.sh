@@ -56,6 +56,15 @@ else
     exit 1
 fi
 
+LOGGING_SH_CHECKSUM=""
+if [ -f "$SCRIPT_DIR/logging.sh" ]; then
+    LOGGING_SH_CHECKSUM=$(sha256sum "$SCRIPT_DIR/logging.sh" | cut -d' ' -f1)
+    log_info "logging.sh checksum: $LOGGING_SH_CHECKSUM"
+else
+    log_error "logging.sh not found!"
+    exit 1
+fi
+
 # Update checksums.txt file
 log_info "Updating $CHECKSUMS_FILE..."
 echo "# SHA256 checksums for dependent scripts" > "$CHECKSUMS_FILE"
@@ -63,12 +72,14 @@ echo "# Generated on $(date)" >> "$CHECKSUMS_FILE"
 echo "" >> "$CHECKSUMS_FILE"
 echo "$INSTALL_UPDATER_CHECKSUM  install-updater.sh" >> "$CHECKSUMS_FILE"
 echo "$AUTOUPDATER_SH_CHECKSUM  autoupdater.sh" >> "$CHECKSUMS_FILE"
+echo "$LOGGING_SH_CHECKSUM  logging.sh" >> "$CHECKSUMS_FILE"
 
 log_info "Generating $OUTPUT_FILE from template..."
 
 # Replace placeholders in template
 sed -e "s/{{INSTALL_UPDATER_CHECKSUM}}/$INSTALL_UPDATER_CHECKSUM/g" \
     -e "s/{{AUTOUPDATER_SH_CHECKSUM}}/$AUTOUPDATER_SH_CHECKSUM/g" \
+    -e "s/{{LOGGING_SH_CHECKSUM}}/$LOGGING_SH_CHECKSUM/g" \
     "$TEMPLATE_FILE" > "$OUTPUT_FILE"
 
 # Make the output file executable
