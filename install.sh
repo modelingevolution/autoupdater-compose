@@ -17,6 +17,9 @@
 
 set -e
 
+# Print script version for debugging
+echo "AutoUpdater Install Script v1.0.42 ($(date '+%Y-%m-%d %H:%M:%S'))"
+
 # Configuration variables
 AUTOUPDATER_VERSION="1.0.42"  # Replaced from autoupdater.version file
 
