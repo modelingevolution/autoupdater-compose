@@ -20,24 +20,26 @@ print_usage() {
     echo
     echo "Arguments:"
     echo "  VERSION     Semantic version (e.g., 1.2.3, 2.0.0)"
-    echo "              If not provided, script will auto-increment patch version"
+    echo "              If not provided, uses version from autoupdater.version file"
+    echo "              If that version already exists, adds suffix (e.g., 1.2.3-1)"
     echo
     echo "Options:"
     echo "  -m, --message TEXT    Commit message (default: 'Release vX.Y.Z')"
-    echo "  -p, --patch           Auto-increment patch version (default)"
-    echo "  -n, --minor           Auto-increment minor version"
-    echo "  -M, --major           Auto-increment major version"
+    echo "  -p, --patch           Auto-increment patch version from latest tag"
+    echo "  -n, --minor           Auto-increment minor version from latest tag"
+    echo "  -M, --major           Auto-increment major version from latest tag"
     echo "  --no-image-update     Skip updating autoupdater image version"
     echo "  --dry-run             Show what would be done without executing"
     echo "  -h, --help            Show this help message"
     echo
     echo "Examples:"
-    echo "  ./release.sh 1.2.3                           # Release specific version"
-    echo "  ./release.sh 1.2.3 -m \"Added new features\"   # With custom message"
-    echo "  ./release.sh --minor -m \"New components\"     # Auto-increment minor"
-    echo "  ./release.sh --patch                         # Auto-increment patch"
-    echo "  ./release.sh --no-image-update               # Skip image version update"
-    echo "  ./release.sh --dry-run                       # Preview release"
+    echo "  ./release.sh                                 # Use autoupdater.version (default)"
+    echo "  ./release.sh 1.2.3                          # Release specific version"
+    echo "  ./release.sh 1.2.3 -m \"Added new features\"  # With custom message"
+    echo "  ./release.sh --minor -m \"New components\"    # Auto-increment minor from latest tag"
+    echo "  ./release.sh --patch                        # Auto-increment patch from latest tag"
+    echo "  ./release.sh --no-image-update              # Skip image version update"
+    echo "  ./release.sh --dry-run                      # Preview release"
 }
 
 print_error() {
@@ -56,10 +58,10 @@ print_info() {
     echo -e "${BLUE}$1${NC}"
 }
 
-# Validate semantic version format
+# Validate semantic version format (with optional suffix)
 validate_version() {
-    if [[ ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Invalid version format: $1. Expected format: X.Y.Z (e.g., 1.2.3)"
+    if [[ ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$ ]]; then
+        print_error "Invalid version format: $1. Expected format: X.Y.Z or X.Y.Z-N (e.g., 1.2.3 or 1.2.3-1)"
         return 1
     fi
 }
@@ -67,6 +69,35 @@ validate_version() {
 # Get the latest version tag for this repository
 get_latest_version() {
     git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's/^v//' || echo "0.0.0"
+}
+
+# Get autoupdater version from autoupdater.version file
+get_autoupdater_version() {
+    if [[ -f "autoupdater.version" ]]; then
+        cat "autoupdater.version" | tr -d '\n' | tr -d ' '
+    else
+        print_error "autoupdater.version file not found"
+        return 1
+    fi
+}
+
+# Find available version with suffix if needed
+find_available_version() {
+    local base_version=$1
+    local version=$base_version
+    local suffix=1
+    
+    while git tag -l | grep -q "^v$version$"; do
+        print_warning "Tag v$version already exists" >&2
+        version="${base_version}-${suffix}"
+        suffix=$((suffix + 1))
+    done
+    
+    if [[ "$version" != "$base_version" ]]; then
+        print_warning "Using version $version instead of $base_version" >&2
+    fi
+    
+    echo "$version"
 }
 
 # Increment version
@@ -174,6 +205,7 @@ main() {
     local message=""
     local dry_run=false
     local no_image_update=false
+    local auto_increment_requested=false
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -196,14 +228,17 @@ main() {
                 ;;
             -p|--patch)
                 increment_type="patch"
+                auto_increment_requested=true
                 shift
                 ;;
             -n|--minor)
                 increment_type="minor"
+                auto_increment_requested=true
                 shift
                 ;;
             -M|--major)
                 increment_type="major"
+                auto_increment_requested=true
                 shift
                 ;;
             -*)
@@ -224,21 +259,26 @@ main() {
         esac
     done
     
-    # If no version specified, auto-increment
+    # If no version specified, use autoupdater version or auto-increment
     if [[ -z "$version" ]]; then
-        local latest_version=$(get_latest_version)
-        version=$(increment_version "$latest_version" "$increment_type")
-        print_info "Auto-incrementing $increment_type version: $latest_version → $version"
+        if [[ "$auto_increment_requested" == true ]]; then
+            # User explicitly requested auto-increment
+            local latest_version=$(get_latest_version)
+            version=$(increment_version "$latest_version" "$increment_type")
+            print_info "Auto-incrementing $increment_type version: $latest_version → $version"
+        else
+            # Default behavior: use autoupdater version
+            local autoupdater_version=$(get_autoupdater_version) || exit 1
+            version=$(find_available_version "$autoupdater_version")
+            print_info "Using AutoUpdater version: $autoupdater_version"
+            if [[ "$version" != "$autoupdater_version" ]]; then
+                print_warning "AutoUpdater version $autoupdater_version already exists, using $version"
+            fi
+        fi
     fi
     
     # Validate version format
     validate_version "$version" || exit 1
-    
-    # Check if tag already exists
-    if git tag -l | grep -q "^v$version$"; then
-        print_error "Tag v$version already exists"
-        exit 1
-    fi
     
     if [[ "$dry_run" == true ]]; then
         print_info "🔍 DRY RUN - Would perform the following actions:"
