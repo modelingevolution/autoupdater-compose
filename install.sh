@@ -10,9 +10,10 @@
 # Security: All downloaded scripts are verified using SHA256 checksums
 # Checksums are automatically updated by update-checksums.sh (run via pre-commit hook)
 #
-# Usage: ./install.sh [--json] [--verbose|-v] <app-name> <git-compose-url> <computer-name>
+# Usage: ./install.sh [--json] [--verbose|-v] [--docker-username <username>] <app-name> <git-compose-url> <computer-name>
 # Example: ./install.sh rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
 # Example with verbose: ./install.sh -v rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI
+# Example with docker auth: ./install.sh --docker-username RESRV-AI-token rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI token123 registry.azurecr.io
 
 set -e
 
@@ -22,6 +23,7 @@ AUTOUPDATER_VERSION="1.0.42"  # Replaced from autoupdater.version file
 # Global variables
 JSON_OUTPUT=false
 VERBOSE=false
+DOCKER_USERNAME=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Download logging.sh first if not present
@@ -47,6 +49,10 @@ parse_arguments() {
                 VERBOSE=true
                 shift
                 ;;
+            --docker-username)
+                DOCKER_USERNAME="$2"
+                shift 2
+                ;;
             *)
                 log_error "Unknown option: $1"
                 exit 1
@@ -56,14 +62,15 @@ parse_arguments() {
     
     if [ $# -lt 3 ] || [ $# -gt 5 ]; then
         if [ "$JSON_OUTPUT" = true ]; then
-            echo '{"status":"error","message":"Usage: ./install.sh [--json] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"}'
+            echo '{"status":"error","message":"Usage: ./install.sh [--json] [--verbose|-v] [--docker-username <username>] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"}'
         else
-            echo "Usage: $0 [--json] [--verbose|-v] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"
+            echo "Usage: $0 [--json] [--verbose|-v] [--docker-username <username>] <app-name> <git-compose-url> <computer-name> [docker-auth] [docker-registry-url]"
             echo "Example: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI"
-            echo "Example with Docker auth: $0 rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI ghp_token123 ghcr.io/myorg"
+            echo "Example with Docker auth: $0 --docker-username RESRV-AI-token rocket-welder https://github.com/modelingevolution/rocketwelder-compose.git RESRV-AI token123 registry.azurecr.io"
             echo "Options:"
-            echo "  --json      Output in JSON format"
-            echo "  --verbose   Show detailed output"
+            echo "  --json                    Output in JSON format"
+            echo "  --verbose, -v             Show detailed output"
+            echo "  --docker-username <name>  Docker registry username (overrides auto-detection)"
             echo "  -v          Same as --verbose"
         fi
         exit 1
@@ -296,11 +303,15 @@ docker_login() {
     if [ -n "$DOCKER_AUTH" ] && [ -n "$DOCKER_REGISTRY_URL" ]; then
         log_info "Logging into Docker registry: $DOCKER_REGISTRY_URL" "docker-login"
         
-        # Determine username based on registry type
+        # Determine username - use provided username or auto-detect
         local username="token"
-        if [[ "$DOCKER_REGISTRY_URL" == *".azurecr.io"* ]]; then
+        if [ -n "$DOCKER_USERNAME" ]; then
+            username="$DOCKER_USERNAME"
+            log_info "Using provided Docker username: $username"
+        elif [[ "$DOCKER_REGISTRY_URL" == *".azurecr.io"* ]]; then
             # For Azure Container Registry, extract registry name as username
             username=$(echo "$DOCKER_REGISTRY_URL" | sed 's/\.azurecr\.io.*//')
+            log_info "Auto-detected ACR username: $username"
         fi
         
         # Login to Docker registry using the provided credentials
