@@ -284,7 +284,8 @@ main() {
         print_info "🔍 DRY RUN - Would perform the following actions:"
         print_info "1. Update autoupdater image version: $([ "$no_image_update" == "true" ] && echo "SKIP" || echo "YES")"
         print_info "2. Commit changes with message: ${message:-"Release v$version"}"
-        print_info "3. Create and push tag: v$version"
+        print_info "3. Push commit to origin"
+        print_info "4. Create and push tag: v$version"
         exit 0
     fi
     
@@ -299,6 +300,11 @@ main() {
     
     # Commit changes (this will add all changes including any uncommitted files)
     commit_changes "$version" "$message" || exit 1
+    
+    # Push commit to remote
+    print_info "Pushing commit to origin..."
+    git push origin || exit 1
+    print_success "✓ Commit pushed to origin"
     
     # Create and push tag
     create_tag "$version" || exit 1
