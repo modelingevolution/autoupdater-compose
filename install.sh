@@ -18,10 +18,10 @@
 set -e
 
 # Print script version for debugging
-echo "AutoUpdater Install Script v1.0.47 ($(date '+%Y-%m-%d %H:%M:%S'))"
+echo "AutoUpdater Install Script v1.0.48 ($(date '+%Y-%m-%d %H:%M:%S'))"
 
 # Configuration variables
-AUTOUPDATER_VERSION="1.0.47"  # Replaced from autoupdater.version file
+AUTOUPDATER_VERSION="1.0.48"  # Replaced from autoupdater.version file
 
 # Global variables
 JSON_OUTPUT=false
