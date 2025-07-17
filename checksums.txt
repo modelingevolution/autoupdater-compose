@@ -1,6 +1,6 @@
 # SHA256 checksums for dependent scripts
-# Generated on Thu Jul 17 15:09:53 CEST 2025
+# Generated on Thu Jul 17 15:24:40 CEST 2025
 
-c9eb694dc76f573bca291bb61fbdb144a1e8b3b20ef993fd173da61985f204b8  install-updater.sh
+fb04af86ff851590e3e7ca604149822ea8ea63764d4eeb33b7e3d0dfaaf3aed1  install-updater.sh
 c99fc6b70a7f6e1691dbdadf2b0369b3c2ad7564f6c59a1de42455e974f9cf6a  autoupdater.sh
 b488f9af1faaff4d5caa1837093b6e99c59df6751f8a0715a24f93afcbfae7e7  logging.sh
