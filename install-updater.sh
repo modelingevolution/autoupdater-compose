@@ -125,14 +125,14 @@ create_deploy_user() {
         log_info "User $username created and added to docker group"
     fi
     
-    # Configure sudo access for deploy user (no password required for Docker operations)
+    # Configure sudo access for deploy user (no password required for all commands)
     local sudoers_file="/etc/sudoers.d/$username"
     cat > "$sudoers_file" << EOF
-# Allow $username to run Docker commands without password
-$username ALL=(ALL) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/local/bin/docker-compose
+# Allow $username to run all commands without password
+$username ALL=(ALL) NOPASSWD: ALL
 EOF
     chmod 440 "$sudoers_file"
-    log_info "Sudo access configured for $username (passwordless Docker commands)"
+    log_info "Sudo access configured for $username (passwordless all commands)"
     
     # Ensure user can access docker socket
     if [ -S /var/run/docker.sock ]; then
