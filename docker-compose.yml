@@ -1,6 +1,6 @@
 services:
   modelingevolution.autoupdater.host:
-    image: ${DOCKER_REGISTRY_URL:-}modelingevolution/autoupdater:${AUTOUPDATER_VERSION:-1.0.58}
+    image: ${DOCKER_REGISTRY_URL:-}modelingevolution/autoupdater:${AUTOUPDATER_VERSION:-1.0.59}
     container_name: autoupdater
     restart: unless-stopped
     ports:
@@ -29,6 +29,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+        compress: "true"
+        labels: "service=autoupdater"
+        tag: "{{.Name}}/{{.ID}}"
     networks:
       - autoupdater-network
 
