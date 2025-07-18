@@ -18,3 +18,6 @@ id_rsa*
 Thumbs.db
 
 appsettings.*.json
+deployment.state.json
+docker-compose.override.yml
+
