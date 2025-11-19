@@ -154,11 +154,29 @@ install_docker() {
         # Install Docker Engine
         run_quiet "Updating package index" apt-get update
         run_quiet "Installing Docker Engine" apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
-        
+
+        # Configure Docker for Jetson/Tegra devices before starting
+        KERNEL_VERSION=$(uname -r)
+        if [[ "$KERNEL_VERSION" == *"tegra"* ]]; then
+            log_info "Detected NVIDIA Jetson/Tegra device (kernel: $KERNEL_VERSION)"
+            log_info "Applying Docker compatibility workaround for Jetson"
+
+            # Create systemd override directory
+            mkdir -p /etc/systemd/system/docker.service.d
+
+            # Create override configuration
+            cat > /etc/systemd/system/docker.service.d/override.conf <<'EOF'
+[Service]
+Environment="DOCKER_INSECURE_NO_IPTABLES_RAW=1"
+EOF
+
+            log_info "Docker configured with DOCKER_INSECURE_NO_IPTABLES_RAW=1 for Jetson compatibility"
+        fi
+
         # Enable and start Docker
         systemctl enable docker
         systemctl start docker
-        
+
         log_info "Docker installed successfully"
     fi
     
