@@ -173,6 +173,29 @@ EOF
             log_info "Docker configured with DOCKER_INSECURE_NO_IPTABLES_RAW=1 for Jetson compatibility"
         fi
 
+        # Configure Docker daemon to avoid VPN IP range (172.20.0.0/16)
+        log_info "Configuring Docker default address pools to avoid VPN conflicts"
+        mkdir -p /etc/docker
+        cat > /etc/docker/daemon.json <<'EOF'
+{
+  "default-address-pools": [
+    {
+      "base": "172.21.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.22.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.23.0.0/16",
+      "size": 24
+    }
+  ]
+}
+EOF
+        log_info "Docker daemon configured to use 172.21-23.0.0/16 address pools"
+
         # Enable Docker
         systemctl enable docker
 
