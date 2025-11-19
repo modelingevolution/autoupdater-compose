@@ -171,6 +171,9 @@ Environment="DOCKER_INSECURE_NO_IPTABLES_RAW=1"
 EOF
 
             log_info "Docker configured with DOCKER_INSECURE_NO_IPTABLES_RAW=1 for Jetson compatibility"
+
+            # Reload systemd to pick up the override
+            systemctl daemon-reload
         fi
 
         # Enable and start Docker
