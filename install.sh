@@ -132,16 +132,12 @@ install_docker() {
         log_info "Current Docker version: $DOCKER_VERSION"
     else
         log_info "Installing Docker"
-
-        # Fix any broken dpkg state
-        log_info "Checking package system integrity"
-        dpkg --configure -a 2>/dev/null || true
-
+        
         # Update package index
         run_quiet "Updating package index" apt-get update
-
+        
         # Install prerequisites
-        run_quiet "Installing Docker prerequisites" apt-get install -y --fix-broken \
+        run_quiet "Installing Docker prerequisites" apt-get install -y \
             apt-transport-https \
             ca-certificates \
             curl \
