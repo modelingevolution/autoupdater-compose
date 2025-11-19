@@ -146,6 +146,7 @@ install_docker() {
         
         # Add Docker's official GPG key
         mkdir -p /etc/apt/keyrings
+        rm -f /etc/apt/keyrings/docker.gpg
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --dearmor -o /etc/apt/keyrings/docker.gpg
         
         # Set up the repository
