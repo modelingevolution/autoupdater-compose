@@ -279,7 +279,16 @@ install_wireguard() {
         mkdir -p /etc/wireguard
         chmod 700 /etc/wireguard
     fi
-    
+
+    # Generate WireGuard keys if they don't exist
+    if [ ! -f /etc/wireguard/privatekey ]; then
+        log_info "Generating WireGuard keys"
+        wg genkey | tee /etc/wireguard/privatekey | wg pubkey | tee /etc/wireguard/publickey > /dev/null
+        chmod 600 /etc/wireguard/privatekey
+        chmod 644 /etc/wireguard/publickey
+        log_info "WireGuard keys generated"
+    fi
+
     log_info "WireGuard installed successfully"
 }
 
