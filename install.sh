@@ -17,8 +17,7 @@
 
 set -e
 
-# Print script version for debugging
-echo "AutoUpdater Install Script v1.0.69 ($(date '+%Y-%m-%d %H:%M:%S'))"
+# Script version will be logged after logging.sh is sourced
 
 # Configuration variables
 AUTOUPDATER_VERSION="1.0.69"  # Replaced from autoupdater.version file
@@ -145,11 +144,13 @@ install_docker() {
             lsb-release
         
         # Add Docker's official GPG key
+        log_info "Adding Docker GPG key"
         mkdir -p /etc/apt/keyrings
         rm -f /etc/apt/keyrings/docker.gpg
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --dearmor -o /etc/apt/keyrings/docker.gpg
         
         # Set up the repository
+        log_info "Setting up Docker repository"
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         
         # Install Docker Engine
@@ -474,7 +475,8 @@ trigger_application_deployment() {
 # Main installation function
 main() {
     parse_arguments "$@"
-    
+
+    log_info "AutoUpdater Install Script v$AUTOUPDATER_VERSION ($(date '+%Y-%m-%d %H:%M:%S'))"
     log_info "Starting complete installation for $APP_NAME on $COMPUTER_NAME"
     
     # Check prerequisites
