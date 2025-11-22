@@ -19,6 +19,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:8080
       # SSH Configuration
+      - SshHost=${HOST_ADDRESS:-172.17.0.1}
       - SshUser=${SSH_USER:-deploy}
       - SshAuthMethod=PrivateKey
       - SshKeyPath=/data/ssh/id_rsa

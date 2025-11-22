@@ -239,11 +239,39 @@ EOF
 }
 EOF
 
+    # Detect Docker bridge gateway IP for HOST_ADDRESS
+    log_info "Detecting Docker bridge gateway IP..."
+    DOCKER_GATEWAY_IP=""
+
+    # Try to detect from docker0 interface
+    if command -v ip &> /dev/null; then
+        DOCKER_GATEWAY_IP=$(ip addr show docker0 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
+    fi
+
+    # Fallback: detect from bridge network inspection
+    if [ -z "$DOCKER_GATEWAY_IP" ] && command -v docker &> /dev/null; then
+        DOCKER_GATEWAY_IP=$(docker network inspect bridge 2>/dev/null | grep -m1 '"Gateway"' | awk '{print $2}' | tr -d ',"')
+    fi
+
+    # Final fallback to standard Docker bridge IP
+    if [ -z "$DOCKER_GATEWAY_IP" ]; then
+        DOCKER_GATEWAY_IP="172.17.0.1"
+        log_warn "Could not detect Docker gateway IP, using default: $DOCKER_GATEWAY_IP"
+    else
+        log_info "Detected Docker gateway IP: $DOCKER_GATEWAY_IP"
+    fi
+
     # Create .env file
     cat > "$AUTOUPDATER_CONFIG/.env" << EOF
 # AutoUpdater Configuration for $COMPUTER_NAME
 COMPUTER_NAME=$COMPUTER_NAME
 DOCKER_REGISTRY_URL=
+
+# SSH Configuration
+SSH_USER=deploy
+
+# Docker host address (gateway IP for container to host communication)
+HOST_ADDRESS=$DOCKER_GATEWAY_IP
 EOF
 
     # Set proper ownership for the git repository (must be deploy user to allow git operations)
