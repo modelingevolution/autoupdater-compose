@@ -155,13 +155,103 @@ install_docker() {
         run_quiet "Updating package index" apt-get update
         run_quiet "Installing Docker Engine" apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
         
+        # Configure Docker for Jetson/Tegra devices and NVIDIA runtime
+        KERNEL_VERSION=$(uname -r)
+
+        # Detect NVIDIA Jetson/Tegra device
+        if [[ "$KERNEL_VERSION" == *"tegra"* ]]; then
+            log_info "Detected NVIDIA Jetson/Tegra device (kernel: $KERNEL_VERSION)"
+            log_info "Applying Docker compatibility workarounds for Jetson"
+
+            # Create systemd override directory
+            mkdir -p /etc/systemd/system/docker.service.d
+
+            # Create override configuration for iptables compatibility
+            cat > /etc/systemd/system/docker.service.d/override.conf <<'EOF'
+[Service]
+Environment="DOCKER_INSECURE_NO_IPTABLES_RAW=1"
+EOF
+
+            log_info "Docker configured with DOCKER_INSECURE_NO_IPTABLES_RAW=1 for Jetson compatibility"
+        fi
+
+        # Configure Docker daemon with custom address pools and NVIDIA runtime
+        log_info "Configuring Docker daemon..."
+        mkdir -p /etc/docker
+
+        # Check if nvidia-container-toolkit is installed
+        NVIDIA_RUNTIME_AVAILABLE=false
+        if command -v nvidia-ctk &> /dev/null || dpkg -l | grep -q nvidia-container-toolkit; then
+            log_info "NVIDIA Container Toolkit detected"
+            NVIDIA_RUNTIME_AVAILABLE=true
+        fi
+
+        # Build daemon.json configuration
+        if [ "$NVIDIA_RUNTIME_AVAILABLE" = true ]; then
+            log_info "Configuring Docker with NVIDIA runtime and custom address pools"
+            cat > /etc/docker/daemon.json <<'EOF'
+{
+  "default-address-pools": [
+    {
+      "base": "172.21.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.22.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.23.0.0/16",
+      "size": 24
+    }
+  ],
+  "default-runtime": "nvidia",
+  "runtimes": {
+    "nvidia": {
+      "args": [],
+      "path": "nvidia-container-runtime"
+    }
+  }
+}
+EOF
+            log_info "✓ Docker configured with NVIDIA runtime as default"
+        else
+            log_info "Configuring Docker with custom address pools (VPN conflict avoidance)"
+            cat > /etc/docker/daemon.json <<'EOF'
+{
+  "default-address-pools": [
+    {
+      "base": "172.21.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.22.0.0/16",
+      "size": 24
+    },
+    {
+      "base": "172.23.0.0/16",
+      "size": 24
+    }
+  ]
+}
+EOF
+            log_info "✓ Docker configured with custom address pools"
+        fi
+
         # Enable and start Docker
         systemctl enable docker
-        systemctl start docker
-        
+
+        # If Jetson, need to reload systemd and restart Docker to pick up override
+        if [[ "$KERNEL_VERSION" == *"tegra"* ]]; then
+            systemctl daemon-reload
+            systemctl restart docker
+        else
+            systemctl start docker
+        fi
+
         log_info "Docker installed successfully"
     fi
-    
+
     # Check Docker Compose
     if command -v docker-compose &> /dev/null; then
         log_info "Docker Compose (standalone) already installed"
