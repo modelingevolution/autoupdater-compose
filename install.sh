@@ -519,7 +519,14 @@ main() {
         run_quiet "Updating package index" apt-get update
         run_quiet "Installing curl" apt-get install -y curl
     fi
-    
+
+    # Install jq if not present (needed for JSON processing)
+    if ! command -v jq &> /dev/null; then
+        log_info "Installing jq"
+        run_quiet "Updating package index" apt-get update
+        run_quiet "Installing jq" apt-get install -y jq
+    fi
+
     # Step 1: Install Docker and Docker Compose
     install_docker
     
