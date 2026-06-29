@@ -88,18 +88,22 @@ manual per-device step. AutoUpdater runs `up-X.Y.Z.sh` **migration scripts** dur
 before restarting). Each migration runs **once per device**, tracked in `deployment.state.json`.
 `{version}` is the autoupdater-compose **release tag** cut by `release.sh`.
 
-`up-1.0.79.sh` registers roma-matcher fleet-wide. It is **best-effort and additive** — it
-**always exits 0**, because a non-zero exit would roll back the entire autoupdater
-self-update. It calls the internal `add-package.sh` engine to add the `Packages[]` entry,
-gated on a per-device credential:
+`up-1.0.79.sh` registers roma-matcher on **GPU-capable devices only**. It is **best-effort
+and additive** — it **always exits 0**, because a non-zero exit would roll back the entire
+autoupdater self-update. It calls the internal `add-package.sh` engine to add the `Packages[]`
+entry, with **no per-package credential**:
 
-- **Opt-in gate:** the migration registers roma-matcher **only if `ROMA_MATCHER_DOCKER_AUTH`
-  is available** (host environment, or the autoupdater `.env`). Seed that variable **only on
-  machines that should run roma-matcher** (production rocket-welder hosts). Devices without
-  it are skipped with a loud warning.
-- **Run-once caveat:** seed `ROMA_MATCHER_DOCKER_AUTH` **before** triggering the self-update.
-  A device that self-updates *before* the variable is seeded marks the migration done and
-  will **not** retry it.
+- **GPU gate:** roma-matcher's compose requires the **NVIDIA docker runtime** (`runtime:
+  nvidia`). The migration registers roma-matcher **only if that runtime is registered with
+  Docker** (`docker info` reports an `nvidia` runtime). Devices without a GPU are skipped.
+- **No secret:** roma-matcher is on the **same Harbor registry as rocket-welder**, and the
+  device already ran a host-level `docker login docker.modelingevolution.com` during
+  rocket-welder install (`install.sh`). That existing login authorizes the roma-matcher pull,
+  so the migration passes empty auth to `add-package.sh`.
+
+> **Prerequisite:** the device's existing Harbor login (the rocket-welder robot account) must
+> have **pull rights on the roma-matcher project**. If that robot is project-scoped to
+> rocket-welder only, widen it on the Harbor side to include `roma-matcher`.
 
 > **Detection caveat:** there is **no background poll** — a device only sees a new release
 > tag when AutoUpdater restarts or when its `:8080` UI / API is queried, and applying it is an
@@ -107,29 +111,14 @@ gated on a per-device credential:
 
 #### Deploy flow
 
-1. **Seed** `ROMA_MATCHER_DOCKER_AUTH` in `/var/docker/configuration/autoupdater/.env` on
-   each machine that should run roma-matcher (base64 `username:password` of a Harbor robot
-   pull token — see [.env.example](.env.example) for how to build it). This is the per-device
-   opt-in gate, so seed it **before** the next step.
-2. **Merge** this PR to `master`.
-3. **Cut the release:** `./release.sh 1.0.79` (creates and pushes tag `v1.0.79`).
-4. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
+1. **Merge** this PR to `master`.
+2. **Cut the release:** `./release.sh 1.0.79` (creates and pushes tag `v1.0.79`).
+3. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
    `autoupdater` package, or `./autoupdater.sh update autoupdater`. The `up-1.0.79.sh`
-   migration runs automatically during this self-update and registers roma-matcher.
-5. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
+   migration runs automatically and registers roma-matcher **on GPU hosts** (no secret).
+4. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
    roma-matcher`) — AutoUpdater clones `roma-matcher-compose` into `/data/roma-matcher` and
    brings it up.
-
-#### Harbor credential format
-
-`ROMA_MATCHER_DOCKER_AUTH` is a **base64-encoded `username:password`** registry auth token
-(the same value Docker writes into `~/.docker/config.json`), from a Harbor robot account with
-pull access to `roma-matcher/roma-matcher` (images are private on
-`docker.modelingevolution.com/roma-matcher/roma-matcher`). Build it with:
-
-```bash
-echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
-```
 
 Never commit a real token — use a `<harbor-auth>` placeholder in docs.
 

@@ -32,46 +32,38 @@ sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD
 ## Deploying roma-matcher (Automatic Self-Update Migration)
 
 roma-matcher is deployed through the AutoUpdater **self-update migration** — a single
-automatic path, no manual per-device registration. The `up-1.0.79.sh` migration runs during
-the autoupdater's own self-update and registers roma-matcher on machines that have opted in
-via a seeded credential. AutoUpdater then clones and deploys it.
+automatic path, no manual per-device registration and **no per-package credential**. The
+`up-1.0.79.sh` migration runs during the autoupdater's own self-update and registers
+roma-matcher **on GPU-capable devices only**. AutoUpdater then clones and deploys it.
 
-1. **Seed the credential** on each machine that should run roma-matcher — add
-   `ROMA_MATCHER_DOCKER_AUTH=<harbor-auth>` to
-   `/var/docker/configuration/autoupdater/.env`. This variable is the **opt-in gate**:
-   machines without it are skipped. Seed it **before** the next step (the migration runs
-   once per device).
+1. **Merge** this PR to `master`.
 2. **Cut an autoupdater-compose release:** `./release.sh 1.0.79` (creates and pushes tag
    `v1.0.79`).
 3. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
    `autoupdater` package, or `./autoupdater.sh update autoupdater`. The `up-1.0.79.sh`
-   migration runs automatically and registers roma-matcher.
+   migration runs automatically and registers roma-matcher on hosts with the NVIDIA docker
+   runtime.
 4. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
    roma-matcher`).
 
+**GPU gate:** roma-matcher's compose needs the **NVIDIA docker runtime** (`runtime: nvidia`).
+The migration registers it only where that runtime is registered with Docker; devices without
+a GPU are skipped. No secret is needed — roma-matcher is on the **same Harbor registry as
+rocket-welder**, and the device already ran `docker login docker.modelingevolution.com` at
+rocket-welder install, so the existing login authorizes the pull.
+
+> **Prerequisite:** the device's existing Harbor login (the rocket-welder robot account) must
+> have **pull rights on the roma-matcher project**. If that robot is scoped to rocket-welder
+> only, widen it Harbor-side to include `roma-matcher`.
+
 > **Detection caveat:** there is **no background poll** — a device only sees the new tag when
 > AutoUpdater restarts or when its `:8080` UI / API is queried; applying it is an **explicit
-> trigger**, so the operator triggers the self-update per device. Also seed the credential
-> **before** triggering: the migration runs once (tracked in `deployment.state.json`) and a
-> device updated before the variable is set won't retry. The migration always exits 0 and
-> never rolls back the autoupdater self-update.
+> trigger**, so the operator triggers the self-update per device. The migration runs once
+> (tracked in `deployment.state.json`), always exits 0, and never rolls back the self-update.
 
-### Harbor credential (`<harbor-auth>`)
-
-`roma-matcher` images are **private** on Harbor at
-`docker.modelingevolution.com/roma-matcher/roma-matcher`. `ROMA_MATCHER_DOCKER_AUTH` is the
-**base64 encoding of `username:password`** (a Docker registry auth token — same value Docker
-stores in `~/.docker/config.json`), from a Harbor robot account with pull access to
-`roma-matcher/roma-matcher`. Build it with:
-
-```bash
-# Replace with the real Harbor robot account name + token (from Harbor → Robot Accounts)
-echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
-```
-
-Do **not** commit the real token anywhere — use a `<harbor-auth>` placeholder. See
-[.env.example](.env.example) and the project
-[README](README.md#deploying-roma-matcher-automatic-via-self-update-migration) for details.
+See the project
+[README](README.md#deploying-roma-matcher-automatic-via-self-update-migration) for the full
+mechanism.
 
 ## What It Does
 
