@@ -29,6 +29,42 @@ sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD
 - `docker-auth` (optional): Docker registry PAT token for private registries
 - `docker-registry-url` (optional): Docker registry URL (e.g., `ghcr.io/myorg`)
 
+## Deploying roma-matcher (Automatic Self-Update Migration)
+
+roma-matcher is deployed through the AutoUpdater **self-update migration** — a single
+automatic path, no manual per-device registration and **no per-package credential**. The
+`up-1.0.79.sh` migration runs during the autoupdater's own self-update and registers
+roma-matcher **on GPU-capable devices only**. AutoUpdater then clones and deploys it.
+
+1. **Merge** this PR to `master`.
+2. **Cut an autoupdater-compose release:** `./release.sh 1.0.79` (creates and pushes tag
+   `v1.0.79`).
+3. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
+   `autoupdater` package, or `./autoupdater.sh update autoupdater`. The `up-1.0.79.sh`
+   migration runs automatically and registers roma-matcher on hosts with the NVIDIA docker
+   runtime.
+4. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
+   roma-matcher`).
+
+**GPU gate:** roma-matcher's compose needs the **NVIDIA docker runtime** (`runtime: nvidia`).
+The migration registers it only where that runtime is registered with Docker; devices without
+a GPU are skipped. No secret is needed — roma-matcher is on the **same Harbor registry as
+rocket-welder**, and the device already ran `docker login docker.modelingevolution.com` at
+rocket-welder install, so the existing login authorizes the pull.
+
+> **Prerequisite:** the device's existing Harbor login (the rocket-welder robot account) must
+> have **pull rights on the roma-matcher project**. If that robot is scoped to rocket-welder
+> only, widen it Harbor-side to include `roma-matcher`.
+
+> **Detection caveat:** there is **no background poll** — a device only sees the new tag when
+> AutoUpdater restarts or when its `:8080` UI / API is queried; applying it is an **explicit
+> trigger**, so the operator triggers the self-update per device. The migration runs once
+> (tracked in `deployment.state.json`), always exits 0, and never rolls back the self-update.
+
+See the project
+[README](README.md#deploying-roma-matcher-automatic-via-self-update-migration) for the full
+mechanism.
+
 ## What It Does
 
 1. Creates `deploy` user with docker access

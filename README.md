@@ -79,6 +79,49 @@ The configuration separates packages into two categories:
   - Your applications (like RocketWelder) go here
   - Updated after StdPackages are up-to-date
 
+### Deploying roma-matcher (Automatic, via Self-Update Migration)
+
+roma-matcher is deployed **only** through the AutoUpdater self-update migration — there is no
+manual per-device step. AutoUpdater runs `up-X.Y.Z.sh` **migration scripts** during its
+**own self-update** (the same `UpdateAsync` flow that handles app packages also handles the
+`autoupdater` package, running migrations on the host in `/var/docker/configuration/autoupdater`
+before restarting). Each migration runs **once per device**, tracked in `deployment.state.json`.
+`{version}` is the autoupdater-compose **release tag** cut by `release.sh`.
+
+`up-1.0.79.sh` registers roma-matcher on **GPU-capable devices only**. It is **best-effort
+and additive** — it **always exits 0**, because a non-zero exit would roll back the entire
+autoupdater self-update. It calls the internal `add-package.sh` engine to add the `Packages[]`
+entry, with **no per-package credential**:
+
+- **GPU gate:** roma-matcher's compose requires the **NVIDIA docker runtime** (`runtime:
+  nvidia`). The migration registers roma-matcher **only if that runtime is registered with
+  Docker** (`docker info` reports an `nvidia` runtime). Devices without a GPU are skipped.
+- **No secret:** roma-matcher is on the **same Harbor registry as rocket-welder**, and the
+  device already ran a host-level `docker login docker.modelingevolution.com` during
+  rocket-welder install (`install.sh`). That existing login authorizes the roma-matcher pull,
+  so the migration passes empty auth to `add-package.sh`.
+
+> **Prerequisite:** the device's existing Harbor login (the rocket-welder robot account) must
+> have **pull rights on the roma-matcher project**. If that robot is project-scoped to
+> rocket-welder only, widen it on the Harbor side to include `roma-matcher`.
+
+> **Detection caveat:** there is **no background poll** — a device only sees a new release
+> tag when AutoUpdater restarts or when its `:8080` UI / API is queried, and applying it is an
+> **explicit trigger**. So the operator triggers the self-update per device.
+
+#### Deploy flow
+
+1. **Merge** this PR to `master`.
+2. **Cut the release:** `./release.sh 1.0.79` (creates and pushes tag `v1.0.79`).
+3. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
+   `autoupdater` package, or `./autoupdater.sh update autoupdater`. The `up-1.0.79.sh`
+   migration runs automatically and registers roma-matcher **on GPU hosts** (no secret).
+4. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
+   roma-matcher`) — AutoUpdater clones `roma-matcher-compose` into `/data/roma-matcher` and
+   brings it up.
+
+Never commit a real token — use a `<harbor-auth>` placeholder in docs.
+
 ### AutoUpdater Version
 
 The current stable version used in the installation script is **1.0.32**, which includes:
