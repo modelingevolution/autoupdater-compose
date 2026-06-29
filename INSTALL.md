@@ -80,6 +80,27 @@ Pass that string as `<harbor-auth>`. Do **not** commit the real token anywhere; 
 credential comes from the Harbor project's robot account with pull permission on
 `roma-matcher/roma-matcher`.
 
+### Automatic fleet-wide rollout (recommended for many devices)
+
+Instead of running `add-package.sh` on every machine, let AutoUpdater register roma-matcher
+during its **self-update** via the `up-1.0.79.sh` migration:
+
+1. **Seed the credential** on each machine that should run roma-matcher — add
+   `ROMA_MATCHER_DOCKER_AUTH=<harbor-auth>` to
+   `/var/docker/configuration/autoupdater/.env`. This variable is the **opt-in gate**:
+   machines without it are skipped.
+2. **Cut an autoupdater-compose release:** `./release.sh 1.0.79`.
+3. Devices self-update, run the migration, and auto-register roma-matcher (opted-in only).
+   AutoUpdater then clones and deploys it.
+
+> Seed the credential **before** the release reaches a device. The migration runs once
+> (tracked in `deployment.state.json`); a device that updates before the variable is set
+> won't retry — register it later with `add-package.sh`. The migration always exits 0 and
+> never rolls back the autoupdater self-update.
+
+See the project [README](README.md#automatic-fleet-wide-registration-migration-scripts) for
+the full mechanism.
+
 ## What It Does
 
 1. Creates `deploy` user with docker access

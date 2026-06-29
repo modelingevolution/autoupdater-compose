@@ -123,6 +123,41 @@ echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
 Never commit a real token — use a `<harbor-auth>` placeholder in docs. The credential is a
 Harbor robot account with pull access to `roma-matcher/roma-matcher`.
 
+### Automatic Fleet-Wide Registration (Migration Scripts)
+
+AutoUpdater runs `up-X.Y.Z.sh` **migration scripts** during its **own self-update** — the
+same `UpdateAsync` flow that handles app packages also handles the `autoupdater` package
+(self-update), executing migrations (on the host, in `/var/docker/configuration/autoupdater`)
+before restarting. Each migration runs **once per device**, tracked in
+`deployment.state.json`. `{version}` is the autoupdater-compose **release tag** cut by
+`release.sh`.
+
+`up-1.0.79.sh` uses this to auto-register roma-matcher fleet-wide without touching each
+device by hand. It is **best-effort and additive** — it **always exits 0**, because a
+non-zero exit would roll back the entire autoupdater self-update.
+
+- **Opt-in gate:** the script registers roma-matcher **only if `ROMA_MATCHER_DOCKER_AUTH`
+  is available** (host environment, or the autoupdater `.env`). Seed that variable **only on
+  machines that should run roma-matcher** (production rocket-welder hosts). Devices without
+  it are skipped with a loud warning.
+- **Important ordering:** seed `ROMA_MATCHER_DOCKER_AUTH` on the target machines **before**
+  the release reaches them. A device that self-updates *before* the variable is seeded marks
+  the migration done and will **not** retry it — register it later with `add-package.sh`.
+
+#### Deploy flow (automatic)
+
+1. **Seed** `ROMA_MATCHER_DOCKER_AUTH` in `/var/docker/configuration/autoupdater/.env` on
+   each production rocket-welder machine (base64 `username:password` of a Harbor robot pull
+   token — see [.env.example](.env.example)).
+2. **Merge** this PR to `master`.
+3. **Cut a release:** `./release.sh 1.0.79` (tags `v1.0.79`).
+4. Devices **self-update**, run `up-1.0.79.sh`, and auto-register roma-matcher (opted-in
+   devices only).
+5. AutoUpdater **clones and deploys** roma-matcher on its next cycle.
+
+The manual `add-package.sh` path above remains the standalone / one-off / after-the-fact
+option.
+
 ### AutoUpdater Version
 
 The current stable version used in the installation script is **1.0.32**, which includes:
