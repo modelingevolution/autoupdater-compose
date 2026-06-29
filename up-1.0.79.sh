@@ -23,6 +23,9 @@ ROMA_MATCHER_REGISTRY="docker.modelingevolution.com"
 # Fall back to the autoupdater .env if not already exported in the host environment.
 if [ -z "${ROMA_MATCHER_DOCKER_AUTH:-}" ] && [ -f "$SCRIPT_DIR/.env" ]; then
     ROMA_MATCHER_DOCKER_AUTH="$(grep -E '^ROMA_MATCHER_DOCKER_AUTH=' "$SCRIPT_DIR/.env" | tail -1 | cut -d= -f2-)"
+    # Strip one pair of surrounding quotes operators often add in .env (base64 padding '=' is preserved by cut -f2-)
+    ROMA_MATCHER_DOCKER_AUTH="${ROMA_MATCHER_DOCKER_AUTH%\"}"; ROMA_MATCHER_DOCKER_AUTH="${ROMA_MATCHER_DOCKER_AUTH#\"}"
+    ROMA_MATCHER_DOCKER_AUTH="${ROMA_MATCHER_DOCKER_AUTH%\'}"; ROMA_MATCHER_DOCKER_AUTH="${ROMA_MATCHER_DOCKER_AUTH#\'}"
 fi
 
 if [ -z "${ROMA_MATCHER_DOCKER_AUTH:-}" ]; then
