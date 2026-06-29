@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# AutoUpdater - Register an additional package
+# AutoUpdater - package registration engine (used by up-X.Y.Z.sh migrations)
 # Adds (or replaces) a single Packages[] entry in appsettings.Production.json
-# without clobbering existing packages. Idempotent.
+# without clobbering existing packages. Idempotent. Invoked by migration scripts
+# (e.g. up-1.0.79.sh) during the AutoUpdater self-update; not a manual deploy step.
 #
 # Usage: ./add-package.sh <app-name> <compose-git-url> [docker-auth] [docker-registry-url] [docker-compose-dir]
-# Example: sudo ./add-package.sh roma-matcher https://github.com/modelingevolution/roma-matcher-compose.git "$(echo -n 'robot$ci:token' | base64)" docker.modelingevolution.com
 
 set -e
 

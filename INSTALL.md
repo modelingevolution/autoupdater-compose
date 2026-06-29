@@ -29,77 +29,49 @@ sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD
 - `docker-auth` (optional): Docker registry PAT token for private registries
 - `docker-registry-url` (optional): Docker registry URL (e.g., `ghcr.io/myorg`)
 
-## Deploying an Additional Package (Co-located)
+## Deploying roma-matcher (Automatic Self-Update Migration)
 
-`install.sh` / `install-updater.sh` provision a machine with a **single** application
-package — they overwrite `appsettings.Production.json` with one `Packages[]` entry. To
-run a second service on a machine that already runs one (e.g. deploying `roma-matcher`
-next to `rocket-welder`), use `add-package.sh`, which adds or replaces a single package
-entry **without clobbering** the existing ones.
+roma-matcher is deployed through the AutoUpdater **self-update migration** — a single
+automatic path, no manual per-device registration. The `up-1.0.79.sh` migration runs during
+the autoupdater's own self-update and registers roma-matcher on machines that have opted in
+via a seeded credential. AutoUpdater then clones and deploys it.
 
-```bash
-# On a production machine that already runs rocket-welder, add roma-matcher:
-sudo ./add-package.sh roma-matcher \
-  https://github.com/modelingevolution/roma-matcher-compose.git \
-  "<harbor-auth>" docker.modelingevolution.com
-```
+1. **Seed the credential** on each machine that should run roma-matcher — add
+   `ROMA_MATCHER_DOCKER_AUTH=<harbor-auth>` to
+   `/var/docker/configuration/autoupdater/.env`. This variable is the **opt-in gate**:
+   machines without it are skipped. Seed it **before** the next step (the migration runs
+   once per device).
+2. **Cut an autoupdater-compose release:** `./release.sh 1.0.79` (creates and pushes tag
+   `v1.0.79`).
+3. **Trigger the self-update on each target device** — the `:8080` UI "Update" on the
+   `autoupdater` package, or `./autoupdater.sh update autoupdater`. The `up-1.0.79.sh`
+   migration runs automatically and registers roma-matcher.
+4. **Deploy roma-matcher:** `./autoupdater.sh update-all` (or `./autoupdater.sh update
+   roma-matcher`).
 
-Parameters: `<app-name> <compose-git-url> [docker-auth] [docker-registry-url] [docker-compose-dir]`
-(`docker-compose-dir` defaults to `./`).
+> **Detection caveat:** there is **no background poll** — a device only sees the new tag when
+> AutoUpdater restarts or when its `:8080` UI / API is queried; applying it is an **explicit
+> trigger**, so the operator triggers the self-update per device. Also seed the credential
+> **before** triggering: the migration runs once (tracked in `deployment.state.json`) and a
+> device updated before the variable is set won't retry. The migration always exits 0 and
+> never rolls back the autoupdater self-update.
 
-The script is **idempotent** — re-running with the same arguments is a no-op; running it
-with a changed auth/registry replaces that package's entry in place. `ComputerName` and
-all other packages are preserved. AutoUpdater clones the package repository into
-`/data/<app-name>` on its next cycle, so `add-package.sh` only writes configuration.
-
-For a **standalone** machine (roma-matcher only, no rocket-welder), use the normal
-installer instead — one package is all it writes:
-
-```bash
-sudo ./install-updater.sh roma-matcher \
-  https://github.com/modelingevolution/roma-matcher-compose.git <computer-name> \
-  "<harbor-auth>" docker.modelingevolution.com <autoupdater-version>
-```
-
-### Harbor / private registry authentication (`<harbor-auth>`)
+### Harbor credential (`<harbor-auth>`)
 
 `roma-matcher` images are **private** on Harbor at
-`docker.modelingevolution.com/roma-matcher/roma-matcher`, so registration needs both
-`DockerRegistryUrl=docker.modelingevolution.com` and a pull credential.
-
-`docker-auth` is the **base64 encoding of `username:password`** (a Docker registry auth
-token — same value Docker stores in `~/.docker/config.json`). Build it from a Harbor
-robot account:
+`docker.modelingevolution.com/roma-matcher/roma-matcher`. `ROMA_MATCHER_DOCKER_AUTH` is the
+**base64 encoding of `username:password`** (a Docker registry auth token — same value Docker
+stores in `~/.docker/config.json`), from a Harbor robot account with pull access to
+`roma-matcher/roma-matcher`. Build it with:
 
 ```bash
 # Replace with the real Harbor robot account name + token (from Harbor → Robot Accounts)
 echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
 ```
 
-Pass that string as `<harbor-auth>`. Do **not** commit the real token anywhere; the
-credential comes from the Harbor project's robot account with pull permission on
-`roma-matcher/roma-matcher`.
-
-### Automatic fleet-wide rollout (recommended for many devices)
-
-Instead of running `add-package.sh` on every machine, let AutoUpdater register roma-matcher
-during its **self-update** via the `up-1.0.79.sh` migration:
-
-1. **Seed the credential** on each machine that should run roma-matcher — add
-   `ROMA_MATCHER_DOCKER_AUTH=<harbor-auth>` to
-   `/var/docker/configuration/autoupdater/.env`. This variable is the **opt-in gate**:
-   machines without it are skipped.
-2. **Cut an autoupdater-compose release:** `./release.sh 1.0.79`.
-3. Devices self-update, run the migration, and auto-register roma-matcher (opted-in only).
-   AutoUpdater then clones and deploys it.
-
-> Seed the credential **before** the release reaches a device. The migration runs once
-> (tracked in `deployment.state.json`); a device that updates before the variable is set
-> won't retry — register it later with `add-package.sh`. The migration always exits 0 and
-> never rolls back the autoupdater self-update.
-
-See the project [README](README.md#automatic-fleet-wide-registration-migration-scripts) for
-the full mechanism.
+Do **not** commit the real token anywhere — use a `<harbor-auth>` placeholder. See
+[.env.example](.env.example) and the project
+[README](README.md#deploying-roma-matcher-automatic-via-self-update-migration) for details.
 
 ## What It Does
 
