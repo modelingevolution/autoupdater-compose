@@ -29,6 +29,57 @@ sudo ./install.sh --json my-app https://github.com/myorg/my-app-compose.git PROD
 - `docker-auth` (optional): Docker registry PAT token for private registries
 - `docker-registry-url` (optional): Docker registry URL (e.g., `ghcr.io/myorg`)
 
+## Deploying an Additional Package (Co-located)
+
+`install.sh` / `install-updater.sh` provision a machine with a **single** application
+package — they overwrite `appsettings.Production.json` with one `Packages[]` entry. To
+run a second service on a machine that already runs one (e.g. deploying `roma-matcher`
+next to `rocket-welder`), use `add-package.sh`, which adds or replaces a single package
+entry **without clobbering** the existing ones.
+
+```bash
+# On a production machine that already runs rocket-welder, add roma-matcher:
+sudo ./add-package.sh roma-matcher \
+  https://github.com/modelingevolution/roma-matcher-compose.git \
+  "<harbor-auth>" docker.modelingevolution.com
+```
+
+Parameters: `<app-name> <compose-git-url> [docker-auth] [docker-registry-url] [docker-compose-dir]`
+(`docker-compose-dir` defaults to `./`).
+
+The script is **idempotent** — re-running with the same arguments is a no-op; running it
+with a changed auth/registry replaces that package's entry in place. `ComputerName` and
+all other packages are preserved. AutoUpdater clones the package repository into
+`/data/<app-name>` on its next cycle, so `add-package.sh` only writes configuration.
+
+For a **standalone** machine (roma-matcher only, no rocket-welder), use the normal
+installer instead — one package is all it writes:
+
+```bash
+sudo ./install-updater.sh roma-matcher \
+  https://github.com/modelingevolution/roma-matcher-compose.git <computer-name> \
+  "<harbor-auth>" docker.modelingevolution.com <autoupdater-version>
+```
+
+### Harbor / private registry authentication (`<harbor-auth>`)
+
+`roma-matcher` images are **private** on Harbor at
+`docker.modelingevolution.com/roma-matcher/roma-matcher`, so registration needs both
+`DockerRegistryUrl=docker.modelingevolution.com` and a pull credential.
+
+`docker-auth` is the **base64 encoding of `username:password`** (a Docker registry auth
+token — same value Docker stores in `~/.docker/config.json`). Build it from a Harbor
+robot account:
+
+```bash
+# Replace with the real Harbor robot account name + token (from Harbor → Robot Accounts)
+echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
+```
+
+Pass that string as `<harbor-auth>`. Do **not** commit the real token anywhere; the
+credential comes from the Harbor project's robot account with pull permission on
+`roma-matcher/roma-matcher`.
+
 ## What It Does
 
 1. Creates `deploy` user with docker access

@@ -79,6 +79,50 @@ The configuration separates packages into two categories:
   - Your applications (like RocketWelder) go here
   - Updated after StdPackages are up-to-date
 
+### Adding Additional Packages (Multiple Apps on One Machine)
+
+The runtime supports **multiple** `Packages[]` entries — AutoUpdater iterates the list and
+manages each independently. The installers (`install.sh` / `install-updater.sh`), however,
+**overwrite** `appsettings.Production.json` with a single package entry, so they cannot
+co-locate a second service on a machine that already runs one.
+
+`add-package.sh` fills that gap. It adds (or replaces) one `Packages[]` entry in the
+existing `/var/docker/configuration/autoupdater/appsettings.Production.json` — the same
+file the installer writes — without clobbering existing packages or `ComputerName`:
+
+```bash
+sudo ./add-package.sh <app-name> <compose-git-url> [docker-auth] [docker-registry-url] [docker-compose-dir]
+```
+
+Behaviour:
+- If a package with the same `RepositoryLocation` (`/data/<app-name>`) exists, its entry is
+  **replaced**; otherwise the entry is **appended**.
+- Writes atomically (temp file + `mv`) and validates the result with `jq empty`.
+- **Idempotent** — re-running with identical arguments is a no-op.
+- AutoUpdater clones the package repo into `/data/<app-name>` on its next cycle, so this
+  script only writes configuration (it does not clone the app repo).
+
+**Example — deploy `roma-matcher` next to `rocket-welder` (private Harbor registry):**
+
+```bash
+sudo ./add-package.sh roma-matcher \
+  https://github.com/modelingevolution/roma-matcher-compose.git \
+  "<harbor-auth>" docker.modelingevolution.com
+```
+
+#### `docker-auth` format
+
+`DockerAuth` is a **base64-encoded `username:password`** registry auth token (the same
+value Docker writes into `~/.docker/config.json`). When `DockerRegistryUrl` is empty it
+defaults to `https://index.docker.io/v1/`. Build a token from a Harbor robot account:
+
+```bash
+echo -n 'robot$roma-matcher+pull:HARBOR_ROBOT_TOKEN' | base64
+```
+
+Never commit a real token — use a `<harbor-auth>` placeholder in docs. The credential is a
+Harbor robot account with pull access to `roma-matcher/roma-matcher`.
+
 ### AutoUpdater Version
 
 The current stable version used in the installation script is **1.0.32**, which includes:
