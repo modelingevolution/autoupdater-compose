@@ -48,13 +48,7 @@ roma-matcher **on GPU-capable devices only**. AutoUpdater then clones and deploy
 
 **GPU gate:** roma-matcher's compose needs the **NVIDIA docker runtime** (`runtime: nvidia`).
 The migration registers it only where that runtime is registered with Docker; devices without
-a GPU are skipped. No secret is needed — roma-matcher is on the **same Harbor registry as
-rocket-welder**, and the device already ran `docker login docker.modelingevolution.com` at
-rocket-welder install, so the existing login authorizes the pull.
-
-> **Prerequisite:** the device's existing Harbor login (the rocket-welder robot account) must
-> have **pull rights on the roma-matcher project**. If that robot is scoped to rocket-welder
-> only, widen it Harbor-side to include `roma-matcher`.
+a GPU are skipped.
 
 > **Detection caveat:** there is **no background poll** — a device only sees the new tag when
 > AutoUpdater restarts or when its `:8080` UI / API is queried; applying it is an **explicit

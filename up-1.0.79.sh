@@ -1,20 +1,8 @@
 #!/bin/bash
 
-# AutoUpdater migration v1.0.79
-# Auto-registers the roma-matcher package on GPU-capable devices.
-#
-# Run automatically by AutoUpdater during its own self-update (migration phase), on the host
-# via SSH, in the working directory /var/docker/configuration/autoupdater. This script is
-# best-effort and ADDITIVE: it MUST NOT fail the autoupdater self-update, so it always exits 0
-# (a non-zero exit would roll the whole self-update back).
-#
-# Gate: roma-matcher's compose requires the NVIDIA docker runtime (runtime: nvidia). Only
-# devices where that runtime is registered with Docker register roma-matcher; the rest skip.
-#
-# Auth: no per-package credential. roma-matcher lives on the same Harbor registry as
-# rocket-welder, and the device already performed a host-level
-# `docker login docker.modelingevolution.com` at rocket-welder install (install.sh), so the
-# existing login authorizes the pull.
+# AutoUpdater migration v1.0.79 — registers roma-matcher on GPU-capable devices.
+# Best-effort and additive: always exits 0, since a non-zero exit rolls back the whole
+# autoupdater self-update. Gate: only devices with the NVIDIA docker runtime register it.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/logging.sh"
