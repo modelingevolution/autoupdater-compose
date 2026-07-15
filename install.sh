@@ -113,6 +113,8 @@ check_root() {
 #
 # The codename comes from os-release rather than `lsb_release -cs`, which is not
 # installed yet at this point and whose Ubuntu codenames never match Debian's.
+# Falls back to lsb_release if os-release carries no codename, so the input
+# contract stays as wide as it was before.
 detect_distro() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -120,7 +122,12 @@ detect_distro() {
             ubuntu|debian)
                 DISTRO_ID="$ID"
                 DISTRO_VERSION="$VERSION_ID"
-                DISTRO_CODENAME="$VERSION_CODENAME"
+                DISTRO_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs 2>/dev/null)}"
+                if [ -z "$DISTRO_CODENAME" ]; then
+                    log_error "Cannot determine the codename for $ID $VERSION_ID"
+                    log_error "Docker's apt repo needs it; set VERSION_CODENAME in /etc/os-release"
+                    exit 1
+                fi
                 log_info "Detected ${NAME:-$ID} $DISTRO_VERSION ($DISTRO_CODENAME)"
                 return 0
                 ;;
