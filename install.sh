@@ -4,7 +4,7 @@
 # This script acts as a bootstrapper that:
 # 1. Downloads required scripts if not present locally (with checksum verification)
 # 2. Installs Docker and Docker Compose
-# 3. Installs VPN (OpenVPN for Ubuntu 20.04, WireGuard for Ubuntu 22.04+ and Debian 12+)
+# 3. Installs VPN (OpenVPN for Ubuntu 20.04, WireGuard for 22.04+)
 # 4. Installs AutoUpdater
 #
 # Security: All downloaded scripts are verified using SHA256 checksums
@@ -18,10 +18,10 @@
 set -e
 
 # Print script version for debugging
-echo "AutoUpdater Install Script v1.0.79 ($(date '+%Y-%m-%d %H:%M:%S'))"
+echo "AutoUpdater Install Script v1.0.80 ($(date '+%Y-%m-%d %H:%M:%S'))"
 
 # Configuration variables
-AUTOUPDATER_VERSION="1.0.79"  # Replaced from autoupdater.version file
+AUTOUPDATER_VERSION="1.0.80"  # Replaced from autoupdater.version file
 
 # Global variables
 JSON_OUTPUT=false
@@ -107,33 +107,17 @@ check_root() {
     fi
 }
 
-# Detect the distribution. Ubuntu and Debian are both supported: Raspberry Pi
-# CM5 devices run Debian. The two differ in Docker's apt repo and in which VPN
-# package set applies, so the id, version and codename are all needed.
-#
-# The codename comes from os-release rather than `lsb_release -cs`, which is not
-# installed yet at this point and whose Ubuntu codenames never match Debian's.
-# Falls back to lsb_release if os-release carries no codename, so the input
-# contract stays as wide as it was before.
-detect_distro() {
+# Detect Ubuntu version
+detect_ubuntu_version() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        case "$ID" in
-            ubuntu|debian)
-                DISTRO_ID="$ID"
-                DISTRO_VERSION="$VERSION_ID"
-                DISTRO_CODENAME="${VERSION_CODENAME:-$(lsb_release -cs 2>/dev/null)}"
-                if [ -z "$DISTRO_CODENAME" ]; then
-                    log_error "Cannot determine the codename for $ID $VERSION_ID"
-                    log_error "Docker's apt repo needs it; set VERSION_CODENAME in /etc/os-release"
-                    exit 1
-                fi
-                log_info "Detected ${NAME:-$ID} $DISTRO_VERSION ($DISTRO_CODENAME)"
-                return 0
-                ;;
-        esac
+        if [[ "$ID" == "ubuntu" ]]; then
+            UBUNTU_VERSION="$VERSION_ID"
+            log_info "Detected Ubuntu $UBUNTU_VERSION"
+            return 0
+        fi
     fi
-    log_error "This script supports Ubuntu and Debian only (found ID=${ID:-unknown})"
+    log_error "This script only supports Ubuntu"
     exit 1
 }
 
@@ -162,13 +146,10 @@ install_docker() {
         
         # Add Docker's official GPG key
         mkdir -p /etc/apt/keyrings
-        # Docker publishes a separate repo per distribution. Pointing Debian at
-        # the ubuntu repo asks for a suite that does not exist (e.g. "ubuntu
-        # trixie") and apt-get update fails.
-        curl -fsSL "https://download.docker.com/linux/${DISTRO_ID}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        
         # Set up the repository
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DISTRO_ID} ${DISTRO_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         
         # Install Docker Engine
         run_quiet "Updating package index" apt-get update
@@ -280,7 +261,7 @@ EOF
         log_info "Installing Docker Compose"
         
         # For Ubuntu 20.04, install standalone docker-compose, for newer versions use plugin
-        if [[ "${DISTRO_ID}:${DISTRO_VERSION}" == "ubuntu:20.04" ]]; then
+        if [[ "$UBUNTU_VERSION" == "20.04" ]]; then
             # Install standalone docker-compose for Ubuntu 20.04
             DOCKER_COMPOSE_VERSION="2.20.2"
             # Detect architecture
@@ -306,24 +287,19 @@ EOF
     log_info "Docker installation completed" "docker"
 }
 
-# Install VPN based on the distribution. Only Ubuntu 20.04 is old enough to want
-# OpenVPN; everything newer, and every supported Debian, uses WireGuard.
+# Install VPN based on Ubuntu version
 install_vpn() {
     log_info "Installing VPN" "vpn"
-
-    case "${DISTRO_ID}:${DISTRO_VERSION}" in
-        ubuntu:20.04)
+    
+    case "$UBUNTU_VERSION" in
+        "20.04")
             install_openvpn
             ;;
-        ubuntu:22.04|ubuntu:24.04|debian:12|debian:13)
+        "22.04"|"24.04")
             install_wireguard
             ;;
         *)
-            # Not fatal, but do not let it pass for a successful install: the
-            # caller's VPN setup is gated on /etc/wireguard/publickey existing,
-            # so without a VPN package every later VPN step silently no-ops.
-            log_warn "No VPN package set for ${DISTRO_ID} ${DISTRO_VERSION} - VPN will NOT be installed"
-            log_warn "All VPN configuration will be skipped downstream (no /etc/wireguard/publickey)"
+            log_warn "Unsupported Ubuntu version for VPN installation: $UBUNTU_VERSION"
             ;;
     esac
     
@@ -358,7 +334,7 @@ install_wireguard() {
         return 0
     fi
     
-    log_info "Installing WireGuard for ${DISTRO_ID} ${DISTRO_VERSION}"
+    log_info "Installing WireGuard for Ubuntu $UBUNTU_VERSION"
     
     run_quiet "Updating package index" apt-get update
     run_quiet "Installing WireGuard" apt-get install -y wireguard wireguard-tools
@@ -535,7 +511,7 @@ main() {
     
     # Check prerequisites
     check_root
-    detect_distro
+    detect_ubuntu_version
     
     # Install curl if not present (needed for downloads)
     if ! command -v curl &> /dev/null; then
@@ -567,14 +543,14 @@ main() {
     trigger_application_deployment
     
     if [ "$JSON_OUTPUT" = true ]; then
-        echo '{"status":"success","message":"Installation completed successfully","app":"'$APP_NAME'","computer":"'$COMPUTER_NAME'","os_id":"'$DISTRO_ID'","os_version":"'$DISTRO_VERSION'"}'
+        echo '{"status":"success","message":"Installation completed successfully","app":"'$APP_NAME'","computer":"'$COMPUTER_NAME'","ubuntu_version":"'$UBUNTU_VERSION'"}'
     else
         log_info "Installation completed successfully!"
         echo ""
         log_info "Summary:"
-        log_info "  - Distribution: $DISTRO_ID $DISTRO_VERSION ($DISTRO_CODENAME)"
+        log_info "  - Ubuntu version: $UBUNTU_VERSION"
         log_info "  - Docker: Installed"
-        log_info "  - VPN: Installed ($([ "${DISTRO_ID}:${DISTRO_VERSION}" = "ubuntu:20.04" ] && echo "OpenVPN" || echo "WireGuard"))"
+        log_info "  - VPN: Installed ($([ "$UBUNTU_VERSION" = "20.04" ] && echo "OpenVPN" || echo "WireGuard"))"
         log_info "  - AutoUpdater: Installed for $APP_NAME"
         log_info "  - Web UI: http://localhost:8080"
     fi
